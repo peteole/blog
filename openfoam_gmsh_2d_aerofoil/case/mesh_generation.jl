@@ -5,17 +5,17 @@ y(x)= 0.594689181*(0.298222773*sqrt(x) - 0.127125232*x - 0.357907906*x^2 + 0.291
 n_points_per_side=200
 n_aerofoil_points=2*n_points_per_side
 bounding_radius=5.0
-far_field_mesh_size=0.3
+far_field_mesh_size=0.2
 touch("aerofoil.geo")
 open("aerofoil.geo","w")do io
     for i in 1:n_points_per_side
         x=(i-1)/(n_points_per_side)
-        mesh_size=0.005#1*x*(1-x)+0.005
+        mesh_size=0.003#1*x*(1-x)+0.005
         println(io,"Point($i) = {$x, $(y(x)), 0.0,$mesh_size};")
     end
     for i in 1:n_points_per_side
         x=1-(i-1)/(n_points_per_side)
-        mesh_size=0.005#1*x*(1-x)+0.005
+        mesh_size=0.003#1*x*(1-x)+0.005
         println(io,"Point($(i+n_points_per_side)) = {$(x), $(-y(x)), 0.0,$mesh_size};")
     end
     for i in 1:2*n_points_per_side
