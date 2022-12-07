@@ -492,25 +492,43 @@ the simulation, which is done here.
 
 ``` julia
 using DataFrames,CSV
-liftData=CSV.read("case/allResults.dat",DataFrame,header=false)[:,[1,4,5]]|>Matrix
+dataString=open(f->read(f, String), "case/allResults.dat")
+filteredString=""
+lastWasSpace=false
+for c in dataString
+    if c==' '||c=='\t'
+        if !lastWasSpace
+            filteredString=filteredString*","
+        end
+        lastWasSpace=true
+    else
+        filteredString=filteredString*c
+        lastWasSpace=false
+    end
+end
+display(filteredString)
+liftData=CSV.File(IOBuffer(filteredString), header=false) |> DataFrame |> Matrix
 display(liftData)
-tangentCoeffs=liftData[:,3]
-normalCoeffs=liftData[:,2]
+tangentCoeffs=liftData[:,4]
+normalCoeffs=liftData[:,5]
 angles=liftData[:,1]
 radAngles=deg2rad.(angles)
 using Plots
-a=1
 liftCoeffs=cos.(radAngles).*normalCoeffs.-sin.(radAngles).*tangentCoeffs
 dragCoeffs=sin.(radAngles).*normalCoeffs.+cos.(radAngles).*tangentCoeffs
 plot(angles,[liftCoeffs,dragCoeffs],label=["Lift coefficient" "Drag coefficient"],xlabel="Angle of attack [°]",ylabel="Coefficient",legend=:bottomright)
 ```
 
-    6×3 Matrix{Float64}:
-      0.001  -0.000702593   0.0124102
-      5.0     0.102505     -0.0154971
-     10.0     0.190889     -0.0937441
-     15.0     0.273154     -0.204022
-     20.0     0.449358     -0.295367
-     25.0     0.703254     -0.155565
+    "0.001,500,-3.614104e-04,1.238661e-02,-2.228611e-03,-1.475716e-03,-7.528953e-04\n5,500,1.048696e-01,-1.604081e-02,4.405856e-01,3.251624e-01,1.154233e-01\n10,500,1.940178e-01,-9.532920e-02,8.315770e-01,6.098063e-01,2.217706e-01\n15,500,2.724558e-01,-2.056075e-01,1.143535e+00," ⋯ 47 bytes ⋯ "2.923124e-01,1.540902e+00,1.234044e+00,3.068581e-01\n25,500,7.683499e-01,-1.376142e-01,2.196841e+00,1.866770e+00,3.300704e-01\n30,500,1.024259e+00,5.342633e-02,2.134043e+00,2.091281e+00,4.276265e-02\n35,500,1.046507e-01,3.125594e-01,-1.054965e-01,5.190245e-02,-1.573990e-01\n"
 
-![](index_files/figure-markdown_strict/cell-7-output-2.png)
+    8×7 Matrix{Float64}:
+      0.001  500.0  -0.00036141   0.0123866  …  -0.00147572  -0.000752895
+      5.0    500.0   0.10487     -0.0160408      0.325162     0.115423
+     10.0    500.0   0.194018    -0.0953292      0.609806     0.221771
+     15.0    500.0   0.272456    -0.205607       0.844223     0.299312
+     20.0    500.0   0.463593    -0.292312       1.23404      0.306858
+     25.0    500.0   0.76835     -0.137614   …   1.86677      0.33007
+     30.0    500.0   1.02426      0.0534263      2.09128      0.0427626
+     35.0    500.0   0.104651     0.312559       0.0519025   -0.157399
+
+![](index_files/figure-markdown_strict/cell-7-output-3.png)

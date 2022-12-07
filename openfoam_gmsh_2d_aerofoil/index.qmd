@@ -342,14 +342,28 @@ The coefficients are calculated at each time step of the solver (a time step is 
 
 ```{julia}
 using DataFrames,CSV
-liftData=CSV.read("case/allResults.dat",DataFrame,header=false)[:,[1,4,5]]|>Matrix
+dataString=open(f->read(f, String), "case/allResults.dat")
+filteredString=""
+lastWasSpace=false
+for c in dataString
+    if c==' '||c=='\t'
+        if !lastWasSpace
+            filteredString=filteredString*","
+        end
+        lastWasSpace=true
+    else
+        filteredString=filteredString*c
+        lastWasSpace=false
+    end
+end
+display(filteredString)
+liftData=CSV.File(IOBuffer(filteredString), header=false) |> DataFrame |> Matrix
 display(liftData)
-tangentCoeffs=liftData[:,3]
-normalCoeffs=liftData[:,2]
+tangentCoeffs=liftData[:,4]
+normalCoeffs=liftData[:,5]
 angles=liftData[:,1]
 radAngles=deg2rad.(angles)
 using Plots
-a=1
 liftCoeffs=cos.(radAngles).*normalCoeffs.-sin.(radAngles).*tangentCoeffs
 dragCoeffs=sin.(radAngles).*normalCoeffs.+cos.(radAngles).*tangentCoeffs
 plot(angles,[liftCoeffs,dragCoeffs],label=["Lift coefficient" "Drag coefficient"],xlabel="Angle of attack [°]",ylabel="Coefficient",legend=:bottomright)

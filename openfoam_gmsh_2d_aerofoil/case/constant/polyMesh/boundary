@@ -20,35 +20,35 @@ FoamFile
     frontAndBackPlanes
     {
         type            empty;
-        physicalType    patch;
+        physicalType    empty;
         nFaces          80820;
         startFace       60185;
     }
     INLET
     {
-        type            patch;
-        physicalType    patch;
+        type            inlet;
+        physicalType    inlet;
         nFaces          80;
         startFace       141005;
     }
     WALL
     {
-        type            patch;
-        physicalType    patch;
+        type            inlet;
+        physicalType    inlet;
         nFaces          50;
         startFace       141085;
     }
     OUTLET
     {
-        type            patch;
-        physicalType    patch;
+        type            outlet;
+        physicalType    outlet;
         nFaces          50;
         startFace       141135;
     }
     AIRFOIL
     {
         type            wall;
-        physicalType    patch;
+        physicalType    wall;
         nFaces          680;
         startFace       141185;
     }

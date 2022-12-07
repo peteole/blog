@@ -167,7 +167,7 @@ The whole geometry generation is done in the <a href="case/mesh_generation.jl">m
 <p>We will simulate a NACA0012 airfoil, which is described by the following equation: <span class="math display">\[
 y(x) = \pm0.594689181*(0.298222773*\sqrt{x} - 0.127125232*x - 0.357907906*x^2 + 0.291984971*x^3 - 0.105174606*x^4)
 \]</span> Now, we will generate a set of points that describe the profile:</p>
-<div class="cell" data-execution_count="2">
+<div class="cell" data-execution_count="1">
 <div class="sourceCode cell-code" id="cb1"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">y</span>(x)<span class="op">=</span> <span class="fl">0.594689181</span><span class="fu">*</span>(<span class="fl">0.298222773</span><span class="fu">*sqrt</span>(x) <span class="op">-</span> <span class="fl">0.127125232</span><span class="op">*</span>x <span class="op">-</span> <span class="fl">0.357907906</span><span class="op">*</span>x<span class="op">^</span><span class="fl">2</span> <span class="op">+</span> <span class="fl">0.291984971</span><span class="op">*</span>x<span class="op">^</span><span class="fl">3</span> <span class="op">-</span> <span class="fl">0.105174606</span><span class="op">*</span>x<span class="op">^</span><span class="fl">4</span>)</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>n_points_per_side<span class="op">=</span><span class="fl">10</span> <span class="co"># this would be much higher in the real case</span></span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>n_aerofoil_points<span class="op">=</span><span class="fl">2</span><span class="op">*</span>n_points_per_side</span>
@@ -213,7 +213,7 @@ Point(20) = {0.09999999999999998, -0.046561895043862704, 0.0,0.005};</code></pre
 </figure>
 </div>
 <p>The next critical step is to connect all the points with a spline. The profile points should be connected with a single spline instead of a set of hundreds of single lines since this will later enable us to name the aerofoil surface. This is done by the following code:</p>
-<div class="cell" data-execution_count="3">
+<div class="cell" data-execution_count="2">
 <div class="sourceCode cell-code" id="cb3"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(io,<span class="st">"""Spline(1)={1:</span><span class="sc">$</span>n_aerofoil_points<span class="st">,1};"""</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>Spline(1)={1:20,1};</code></pre>
@@ -230,7 +230,7 @@ Point(20) = {0.09999999999999998, -0.046561895043862704, 0.0,0.005};</code></pre
 <section id="generating-the-bounding-box" class="level3">
 <h3 class="anchored" data-anchor-id="generating-the-bounding-box">Generating the bounding box</h3>
 <p>The next step is to generate the bounding box. This is done by the following code:</p>
-<div class="cell" data-execution_count="4">
+<div class="cell" data-execution_count="3">
 <div class="sourceCode cell-code" id="cb5"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>bounding_radius<span class="op">=</span><span class="fl">5.0</span></span>
 <span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>far_field_mesh_size<span class="op">=</span><span class="fl">0.3</span></span>
 <span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(io,<span class="st">"Point(</span><span class="sc">$</span>(n_aerofoil_points<span class="op">+</span><span class="fl">1</span>)<span class="st">) = {0.0, </span><span class="sc">$</span>(bounding_radius)<span class="st">, 0.0, </span><span class="sc">$</span>far_field_mesh_size<span class="st">};"</span>)</span>
@@ -264,7 +264,7 @@ Line(25) = {25, 22};</code></pre>
 </figure>
 </div>
 <p>Next, we want to create a surface that fills the area between the aerofoil and the bounding box. This is done by the following code:</p>
-<div class="cell" data-execution_count="5">
+<div class="cell" data-execution_count="4">
 <div class="sourceCode cell-code" id="cb7"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(io,<span class="st">"Curve Loop(2) = {</span><span class="sc">$</span>(n_aerofoil_points<span class="op">+</span><span class="fl">1</span>)<span class="st">:</span><span class="sc">$</span>(n_aerofoil_points<span class="op">+</span><span class="fl">5</span>)<span class="st">};"</span>)</span>
 <span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(io,<span class="st">"Curve Loop(3) = {1};"</span>)</span>
 <span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(io,<span class="st">"Plane Surface(1) = {2,3};"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
@@ -279,7 +279,7 @@ Plane Surface(1) = {2,3};</code></pre>
 <section id="extruding-the-geometry" class="level3">
 <h3 class="anchored" data-anchor-id="extruding-the-geometry">Extruding the geometry</h3>
 <p>OpenFoam does not allow us to use 2D geometries, so we need to extrude the geometry in the z-direction. This is done by the following code:</p>
-<div class="cell" data-execution_count="6">
+<div class="cell" data-execution_count="5">
 <div class="sourceCode cell-code" id="cb9"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(io,<span class="st">"""</span></span>
 <span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="st">meshThickness=1.0;</span></span>
 <span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a><span class="st">surfaceVector[] = Extrude {0, 0, meshThickness} {</span></span>
@@ -514,30 +514,49 @@ Physical Surface("WALL")={surfaceVector[4],surfaceVector[6]};
 </section>
 <section id="results" class="level1">
 <h1>Results</h1>
-<div class="cell" data-execution_count="7">
+<div class="cell" data-execution_count="6">
 <div class="sourceCode cell-code" id="cb19"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">DataFrames</span>,<span class="bu">CSV</span></span>
-<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>liftData<span class="op">=</span>CSV.<span class="fu">read</span>(<span class="st">"case/allResults.dat"</span>,DataFrame,header<span class="op">=</span><span class="cn">false</span>)[<span class="op">:</span>,[<span class="fl">1</span>,<span class="fl">4</span>,<span class="fl">5</span>]]<span class="op">|&gt;</span><span class="dt">Matrix</span></span>
-<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a><span class="fu">display</span>(liftData)</span>
-<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a>tangentCoeffs<span class="op">=</span>liftData[<span class="op">:</span>,<span class="fl">3</span>]</span>
-<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a>normalCoeffs<span class="op">=</span>liftData[<span class="op">:</span>,<span class="fl">2</span>]</span>
-<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a>angles<span class="op">=</span>liftData[<span class="op">:</span>,<span class="fl">1</span>]</span>
-<span id="cb19-7"><a href="#cb19-7" aria-hidden="true" tabindex="-1"></a>radAngles<span class="op">=</span><span class="fu">deg2rad</span>.(angles)</span>
-<span id="cb19-8"><a href="#cb19-8" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">Plots</span></span>
-<span id="cb19-9"><a href="#cb19-9" aria-hidden="true" tabindex="-1"></a>a<span class="op">=</span><span class="fl">1</span></span>
-<span id="cb19-10"><a href="#cb19-10" aria-hidden="true" tabindex="-1"></a>liftCoeffs<span class="op">=</span><span class="fu">cos</span>.(radAngles)<span class="op">.*</span>normalCoeffs<span class="op">.-</span><span class="fu">sin</span>.(radAngles)<span class="op">.*</span>tangentCoeffs</span>
-<span id="cb19-11"><a href="#cb19-11" aria-hidden="true" tabindex="-1"></a>dragCoeffs<span class="op">=</span><span class="fu">sin</span>.(radAngles)<span class="op">.*</span>normalCoeffs<span class="op">.+</span><span class="fu">cos</span>.(radAngles)<span class="op">.*</span>tangentCoeffs</span>
-<span id="cb19-12"><a href="#cb19-12" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(angles,[liftCoeffs,dragCoeffs],label<span class="op">=</span>[<span class="st">"Lift coefficient"</span> <span class="st">"Drag coefficient"</span>],xlabel<span class="op">=</span><span class="st">"Angle of attack [°]"</span>,ylabel<span class="op">=</span><span class="st">"Coefficient"</span>,legend<span class="op">=:</span>bottomright)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>dataString<span class="op">=</span><span class="fu">open</span>(<span class="fu">f-&gt;read</span>(f, <span class="dt">String</span>), <span class="st">"case/allResults.dat"</span>)</span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a>filteredString<span class="op">=</span><span class="st">""</span></span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a>lastWasSpace<span class="op">=</span><span class="cn">false</span></span>
+<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> c <span class="kw">in</span> dataString</span>
+<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> c<span class="op">==</span><span class="ch">' '</span><span class="op">||</span>c<span class="op">==</span><span class="ch">'\t'</span></span>
+<span id="cb19-7"><a href="#cb19-7" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> !lastWasSpace</span>
+<span id="cb19-8"><a href="#cb19-8" aria-hidden="true" tabindex="-1"></a>            filteredString<span class="op">=</span>filteredString<span class="op">*</span><span class="st">","</span></span>
+<span id="cb19-9"><a href="#cb19-9" aria-hidden="true" tabindex="-1"></a>        <span class="cf">end</span></span>
+<span id="cb19-10"><a href="#cb19-10" aria-hidden="true" tabindex="-1"></a>        lastWasSpace<span class="op">=</span><span class="cn">true</span></span>
+<span id="cb19-11"><a href="#cb19-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">else</span></span>
+<span id="cb19-12"><a href="#cb19-12" aria-hidden="true" tabindex="-1"></a>        filteredString<span class="op">=</span>filteredString<span class="op">*</span>c</span>
+<span id="cb19-13"><a href="#cb19-13" aria-hidden="true" tabindex="-1"></a>        lastWasSpace<span class="op">=</span><span class="cn">false</span></span>
+<span id="cb19-14"><a href="#cb19-14" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb19-15"><a href="#cb19-15" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span>
+<span id="cb19-16"><a href="#cb19-16" aria-hidden="true" tabindex="-1"></a><span class="fu">display</span>(filteredString)</span>
+<span id="cb19-17"><a href="#cb19-17" aria-hidden="true" tabindex="-1"></a>liftData<span class="op">=</span>CSV.<span class="fu">File</span>(<span class="fu">IOBuffer</span>(filteredString), header<span class="op">=</span><span class="cn">false</span>) <span class="op">|&gt;</span> DataFrame <span class="op">|&gt;</span> <span class="dt">Matrix</span></span>
+<span id="cb19-18"><a href="#cb19-18" aria-hidden="true" tabindex="-1"></a><span class="fu">display</span>(liftData)</span>
+<span id="cb19-19"><a href="#cb19-19" aria-hidden="true" tabindex="-1"></a>tangentCoeffs<span class="op">=</span>liftData[<span class="op">:</span>,<span class="fl">4</span>]</span>
+<span id="cb19-20"><a href="#cb19-20" aria-hidden="true" tabindex="-1"></a>normalCoeffs<span class="op">=</span>liftData[<span class="op">:</span>,<span class="fl">5</span>]</span>
+<span id="cb19-21"><a href="#cb19-21" aria-hidden="true" tabindex="-1"></a>angles<span class="op">=</span>liftData[<span class="op">:</span>,<span class="fl">1</span>]</span>
+<span id="cb19-22"><a href="#cb19-22" aria-hidden="true" tabindex="-1"></a>radAngles<span class="op">=</span><span class="fu">deg2rad</span>.(angles)</span>
+<span id="cb19-23"><a href="#cb19-23" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">Plots</span></span>
+<span id="cb19-24"><a href="#cb19-24" aria-hidden="true" tabindex="-1"></a>liftCoeffs<span class="op">=</span><span class="fu">cos</span>.(radAngles)<span class="op">.*</span>normalCoeffs<span class="op">.-</span><span class="fu">sin</span>.(radAngles)<span class="op">.*</span>tangentCoeffs</span>
+<span id="cb19-25"><a href="#cb19-25" aria-hidden="true" tabindex="-1"></a>dragCoeffs<span class="op">=</span><span class="fu">sin</span>.(radAngles)<span class="op">.*</span>normalCoeffs<span class="op">.+</span><span class="fu">cos</span>.(radAngles)<span class="op">.*</span>tangentCoeffs</span>
+<span id="cb19-26"><a href="#cb19-26" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(angles,[liftCoeffs,dragCoeffs],label<span class="op">=</span>[<span class="st">"Lift coefficient"</span> <span class="st">"Drag coefficient"</span>],xlabel<span class="op">=</span><span class="st">"Angle of attack [°]"</span>,ylabel<span class="op">=</span><span class="st">"Coefficient"</span>,legend<span class="op">=:</span>bottomright)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-display">
-<pre><code>6×3 Matrix{Float64}:
-  0.001  -0.000702593   0.0124102
-  5.0     0.102505     -0.0154971
- 10.0     0.190889     -0.0937441
- 15.0     0.273154     -0.204022
- 20.0     0.449358     -0.295367
- 25.0     0.703254     -0.155565</code></pre>
+<pre><code>"0.001,500,-3.614104e-04,1.238661e-02,-2.228611e-03,-1.475716e-03,-7.528953e-04\n5,500,1.048696e-01,-1.604081e-02,4.405856e-01,3.251624e-01,1.154233e-01\n10,500,1.940178e-01,-9.532920e-02,8.315770e-01,6.098063e-01,2.217706e-01\n15,500,2.724558e-01,-2.056075e-01,1.143535e+00," ⋯ 47 bytes ⋯ "2.923124e-01,1.540902e+00,1.234044e+00,3.068581e-01\n25,500,7.683499e-01,-1.376142e-01,2.196841e+00,1.866770e+00,3.300704e-01\n30,500,1.024259e+00,5.342633e-02,2.134043e+00,2.091281e+00,4.276265e-02\n35,500,1.046507e-01,3.125594e-01,-1.054965e-01,5.190245e-02,-1.573990e-01\n"</code></pre>
 </div>
-<div class="cell-output cell-output-display" data-execution_count="108">
-<p><img src="index_files/figure-html/cell-7-output-2.svg" class="img-fluid"></p>
+<div class="cell-output cell-output-display">
+<pre><code>8×7 Matrix{Float64}:
+  0.001  500.0  -0.00036141   0.0123866  …  -0.00147572  -0.000752895
+  5.0    500.0   0.10487     -0.0160408      0.325162     0.115423
+ 10.0    500.0   0.194018    -0.0953292      0.609806     0.221771
+ 15.0    500.0   0.272456    -0.205607       0.844223     0.299312
+ 20.0    500.0   0.463593    -0.292312       1.23404      0.306858
+ 25.0    500.0   0.76835     -0.137614   …   1.86677      0.33007
+ 30.0    500.0   1.02426      0.0534263      2.09128      0.0427626
+ 35.0    500.0   0.104651     0.312559       0.0519025   -0.157399</code></pre>
+</div>
+<div class="cell-output cell-output-display" data-execution_count="186">
+<p><img src="index_files/figure-html/cell-7-output-3.svg" class="img-fluid"></p>
 </div>
 </div>
 </section>
