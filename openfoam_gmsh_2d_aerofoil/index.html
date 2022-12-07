@@ -99,6 +99,7 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
 <link href="index_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
 <link href="index_files/libs/bootstrap/bootstrap.min.css" rel="stylesheet" id="quarto-bootstrap" data-mode="light">
 
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
 
 </head>
 
@@ -145,21 +146,192 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
 
 <section id="introduction" class="level1">
 <h1>Introduction</h1>
-<p>The starting point is the <a href="https://www.openfoam.com/documentation/guides/latest/doc/verification-validation-naca0012-airfoil-2d.html">NACA0012 tutorial case in OpenFoam</a>. Copy this case to your new working directory. In this tutorial, we will have a look at how to simulate your custom 2d geometry.</p>
+<p>The starting point is the <a href="https://www.openfoam.com/documentation/guides/latest/doc/verification-validation-naca0012-airfoil-2d.html">NACA0012 tutorial case in OpenFoam</a>. Copy this case to your new working directory. In this tutorial, we will have a look at how to simulate your custom 2d geometry as the tutorial is intransparent about how the mesh was generated.</p>
+</section>
+<section id="mesh-generation" class="level1">
+<h1>Mesh generation</h1>
+<p>We will use <code>gmsh</code> to generate the mesh. To do so, we will first generate the geometry using <code>gmsh</code>’s geometry format, use the <code>gmsh</code> GUI to debug the geometry and finally generate the mesh.</p>
+<section id="geometry-generation" class="level2">
+<h2 class="anchored" data-anchor-id="geometry-generation">Geometry generation</h2>
+<p>The geometry will look as follows:</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="./images/geometry.png" class="img-fluid figure-img"></p>
+<p></p><figcaption class="figure-caption">Geometry of our simulation</figcaption><p></p>
+</figure>
+</div>
+<p>The volume in which fluid is to be simulated is the whole body from which the aerofoil in the middle is cut out. The circle arc on the left is the inlet while the outlet is the rectangle on the right.<br>
+The whole geometry generation is done in the <a href="case/mesh_generation.jl">mesh_generation.jl</a> script, which outputs a <code>gmsh</code> geometry file <a href="case/aerofoil.geo">aerofoil.geo</a> that <code>gmsh</code> can read. Note that <code>gmsh</code> has its own <a href="https://gmsh.info/doc/texinfo/gmsh.html">geometry scripting language</a>, but I found it easier to use a proper programming language like <code>julia</code> to generate the geometry.</p>
+<section id="generating-the-profile" class="level3">
+<h3 class="anchored" data-anchor-id="generating-the-profile">Generating the profile</h3>
+<p>We will simulate a NACA0012 airfoil, which is described by the following equation: <span class="math display">\[
+y(x) = \pm0.594689181*(0.298222773*\sqrt{x} - 0.127125232*x - 0.357907906*x^2 + 0.291984971*x^3 - 0.105174606*x^4)
+\]</span> Now, we will generate a set of points that describe the profile:</p>
+<div class="cell" data-execution_count="2">
+<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">y</span>(x)<span class="op">=</span> <span class="fl">0.594689181</span><span class="fu">*</span>(<span class="fl">0.298222773</span><span class="fu">*sqrt</span>(x) <span class="op">-</span> <span class="fl">0.127125232</span><span class="op">*</span>x <span class="op">-</span> <span class="fl">0.357907906</span><span class="op">*</span>x<span class="op">^</span><span class="fl">2</span> <span class="op">+</span> <span class="fl">0.291984971</span><span class="op">*</span>x<span class="op">^</span><span class="fl">3</span> <span class="op">-</span> <span class="fl">0.105174606</span><span class="op">*</span>x<span class="op">^</span><span class="fl">4</span>)</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>n_points_per_side<span class="op">=</span><span class="fl">10</span> <span class="co"># this would be much higher in the real case</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>n_aerofoil_points<span class="op">=</span><span class="fl">2</span><span class="op">*</span>n_points_per_side</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>io<span class="op">=</span><span class="cn">stdout</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> i <span class="kw">in</span> <span class="fl">1</span><span class="op">:</span>n_points_per_side</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    x<span class="op">=</span>(i<span class="op">-</span><span class="fl">1</span>)<span class="op">/</span>(n_points_per_side)</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    mesh_size<span class="op">=</span><span class="fl">0.005</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>    <span class="fu">println</span>(io,<span class="st">"Point(</span><span class="sc">$</span>i<span class="st">) = {</span><span class="sc">$</span>x<span class="st">, </span><span class="sc">$</span>(<span class="fu">y</span>(x))<span class="st">, 0.0,</span><span class="sc">$</span>mesh_size<span class="st">};"</span>)</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> i <span class="kw">in</span> <span class="fl">1</span><span class="op">:</span>n_points_per_side</span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>    x<span class="op">=</span><span class="fl">1</span><span class="fu">-</span>(i<span class="op">-</span><span class="fl">1</span>)<span class="op">/</span>(n_points_per_side)</span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>    mesh_size<span class="op">=</span><span class="fl">0.005</span></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>    <span class="fu">println</span>(io,<span class="st">"Point(</span><span class="sc">$</span>(i<span class="op">+</span>n_points_per_side)<span class="st">) = {</span><span class="sc">$</span>(x)<span class="st">, </span><span class="sc">$</span>(<span class="fu">-y</span>(x))<span class="st">, 0.0,</span><span class="sc">$</span>mesh_size<span class="st">};"</span>)</span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Point(1) = {0.0, 0.0, 0.0,0.005};
+Point(2) = {0.1, 0.046561895043862704, 0.0,0.005};
+Point(3) = {0.2, 0.056968557150769476, 0.0,0.005};
+Point(4) = {0.3, 0.05948422462775665, 0.0,0.005};
+Point(5) = {0.4, 0.05738266105317275, 0.0,0.005};
+Point(6) = {0.5, 0.05219019673131475, 0.0,0.005};
+Point(7) = {0.6, 0.04479110070446828, 0.0,0.005};
+Point(8) = {0.7, 0.03570927685952479, 0.0,0.005};
+Point(9) = {0.8, 0.025211311562171167, 0.0,0.005};
+Point(10) = {0.9, 0.013352458679209828, 0.0,0.005};
+Point(11) = {1.0, 1.650594053104193e-17, 0.0,0.005};
+Point(12) = {0.9, -0.013352458679209828, 0.0,0.005};
+Point(13) = {0.8, -0.025211311562171167, 0.0,0.005};
+Point(14) = {0.7, -0.03570927685952479, 0.0,0.005};
+Point(15) = {0.6, -0.04479110070446828, 0.0,0.005};
+Point(16) = {0.5, -0.05219019673131475, 0.0,0.005};
+Point(17) = {0.4, -0.05738266105317275, 0.0,0.005};
+Point(18) = {0.30000000000000004, -0.05948422462775666, 0.0,0.005};
+Point(19) = {0.19999999999999996, -0.05696855715076947, 0.0,0.005};
+Point(20) = {0.09999999999999998, -0.046561895043862704, 0.0,0.005};</code></pre>
+</div>
+</div>
+<p>The syntax is <code>Point(i) = {x, y, z, mesh_size};</code> where <code>i</code> is a unique index of the point, <code>x</code>, <code>y</code> and <code>z</code> are the coordinates and <code>mesh_size</code> is the desired mesh size at this point. Pasting this output into a file called <code>aerofoil.geo</code> (or setting the script up to write its output to that file like in the <a href="case/mesh_generation.jl">final version</a> and running <code>gmsh aerofoil.geo</code> will prompt you with the following:</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="images/raw_profile.png" class="img-fluid figure-img"></p>
+<p></p><figcaption class="figure-caption">Profile points</figcaption><p></p>
+</figure>
+</div>
+<p>The next critical step is to connect all the points with a spline. The profile points should be connected with a single spline instead of a set of hundreds of single lines since this will later enable us to name the aerofoil surface. This is done by the following code:</p>
+<div class="cell" data-execution_count="3">
+<div class="sourceCode cell-code" id="cb3"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(io,<span class="st">"""Spline(1)={1:</span><span class="sc">$</span>n_aerofoil_points<span class="st">,1};"""</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Spline(1)={1:20,1};</code></pre>
+</div>
+</div>
+<p>The syntax is <code>Spline(i)={p1,p2,...pk};</code> where <code>i</code> is a unique index of the spline and <code>pi</code> are the indices of the points the spline should connect. <code>pi:pj</code> is a shorthand for <code>pi,pi+1,...,pj</code>. The <code>1</code> at the end of the line is the first index again, which is needed to close the spline. The result is the following:</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="images/splined_profile.png" class="img-fluid figure-img"></p>
+<p></p><figcaption class="figure-caption">Profile with spline</figcaption><p></p>
+</figure>
+</div>
+</section>
+<section id="generating-the-bounding-box" class="level3">
+<h3 class="anchored" data-anchor-id="generating-the-bounding-box">Generating the bounding box</h3>
+<p>The next step is to generate the bounding box. This is done by the following code:</p>
+<div class="cell" data-execution_count="4">
+<div class="sourceCode cell-code" id="cb5"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>bounding_radius<span class="op">=</span><span class="fl">5.0</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>far_field_mesh_size<span class="op">=</span><span class="fl">0.3</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(io,<span class="st">"Point(</span><span class="sc">$</span>(n_aerofoil_points<span class="op">+</span><span class="fl">1</span>)<span class="st">) = {0.0, </span><span class="sc">$</span>(bounding_radius)<span class="st">, 0.0, </span><span class="sc">$</span>far_field_mesh_size<span class="st">};"</span>)</span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(io,<span class="st">"Point(</span><span class="sc">$</span>(n_aerofoil_points<span class="op">+</span><span class="fl">2</span>)<span class="st">) = {0.0, </span><span class="sc">$</span>(<span class="op">-</span>bounding_radius)<span class="st">, 0.0, </span><span class="sc">$</span>far_field_mesh_size<span class="st">};"</span>)</span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(io,<span class="st">"Point(</span><span class="sc">$</span>(n_aerofoil_points<span class="op">+</span><span class="fl">3</span>)<span class="st">) = {</span><span class="sc">$</span>(<span class="op">-</span>bounding_radius)<span class="st">, 0.0, 0.0, </span><span class="sc">$</span>far_field_mesh_size<span class="st">};"</span>)</span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(io,<span class="st">"Point(</span><span class="sc">$</span>(n_aerofoil_points<span class="op">+</span><span class="fl">4</span>)<span class="st">) = {</span><span class="sc">$</span>(bounding_radius)<span class="st">, </span><span class="sc">$</span>(bounding_radius)<span class="st">, 0.0, </span><span class="sc">$</span>far_field_mesh_size<span class="st">};"</span>)</span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(io,<span class="st">"Point(</span><span class="sc">$</span>(n_aerofoil_points<span class="op">+</span><span class="fl">5</span>)<span class="st">) = {</span><span class="sc">$</span>(bounding_radius)<span class="st">, </span><span class="sc">$</span>(<span class="op">-</span>bounding_radius)<span class="st">, 0.0, </span><span class="sc">$</span>far_field_mesh_size<span class="st">};"</span>)</span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(io,<span class="st">"Circle(</span><span class="sc">$</span>(n_aerofoil_points<span class="op">+</span><span class="fl">1</span>)<span class="st">)= {</span><span class="sc">$</span>(n_aerofoil_points<span class="op">+</span><span class="fl">2</span>)<span class="st">, 1, </span><span class="sc">$</span>(n_aerofoil_points<span class="op">+</span><span class="fl">3</span>)<span class="st">};"</span>)</span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(io,<span class="st">"Circle(</span><span class="sc">$</span>(n_aerofoil_points<span class="op">+</span><span class="fl">2</span>)<span class="st">)= {</span><span class="sc">$</span>(n_aerofoil_points<span class="op">+</span><span class="fl">3</span>)<span class="st">, 1, </span><span class="sc">$</span>(n_aerofoil_points<span class="op">+</span><span class="fl">1</span>)<span class="st">};"</span>)</span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(io,<span class="st">"Line(</span><span class="sc">$</span>(n_aerofoil_points<span class="op">+</span><span class="fl">3</span>)<span class="st">) = {</span><span class="sc">$</span>(n_aerofoil_points<span class="op">+</span><span class="fl">1</span>)<span class="st">, </span><span class="sc">$</span>(n_aerofoil_points<span class="op">+</span><span class="fl">4</span>)<span class="st">};"</span>)</span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(io,<span class="st">"Line(</span><span class="sc">$</span>(n_aerofoil_points<span class="op">+</span><span class="fl">4</span>)<span class="st">) = {</span><span class="sc">$</span>(n_aerofoil_points<span class="op">+</span><span class="fl">4</span>)<span class="st">, </span><span class="sc">$</span>(n_aerofoil_points<span class="op">+</span><span class="fl">5</span>)<span class="st">};"</span>)</span>
+<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(io,<span class="st">"Line(</span><span class="sc">$</span>(n_aerofoil_points<span class="op">+</span><span class="fl">5</span>)<span class="st">) = {</span><span class="sc">$</span>(n_aerofoil_points<span class="op">+</span><span class="fl">5</span>)<span class="st">, </span><span class="sc">$</span>(n_aerofoil_points<span class="op">+</span><span class="fl">2</span>)<span class="st">};"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Point(21) = {0.0, 5.0, 0.0, 0.3};
+Point(22) = {0.0, -5.0, 0.0, 0.3};
+Point(23) = {-5.0, 0.0, 0.0, 0.3};
+Point(24) = {5.0, 5.0, 0.0, 0.3};
+Point(25) = {5.0, -5.0, 0.0, 0.3};
+Circle(21)= {22, 1, 23};
+Circle(22)= {23, 1, 21};
+Line(23) = {21, 24};
+Line(24) = {24, 25};
+Line(25) = {25, 22};</code></pre>
+</div>
+</div>
+<p>You can look up the exact syntax of the commands in the <a href="https://gmsh.info/doc/texinfo/gmsh.html">Gmsh documentation</a>. The result is the following:</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="images/bounding_box_2d.png" class="img-fluid figure-img"></p>
+<p></p><figcaption class="figure-caption">Profile with bounding box</figcaption><p></p>
+</figure>
+</div>
+<p>Next, we want to create a surface that fills the area between the aerofoil and the bounding box. This is done by the following code:</p>
+<div class="cell" data-execution_count="5">
+<div class="sourceCode cell-code" id="cb7"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(io,<span class="st">"Curve Loop(2) = {</span><span class="sc">$</span>(n_aerofoil_points<span class="op">+</span><span class="fl">1</span>)<span class="st">:</span><span class="sc">$</span>(n_aerofoil_points<span class="op">+</span><span class="fl">5</span>)<span class="st">};"</span>)</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(io,<span class="st">"Curve Loop(3) = {1};"</span>)</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(io,<span class="st">"Plane Surface(1) = {2,3};"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Curve Loop(2) = {21:25};
+Curve Loop(3) = {1};
+Plane Surface(1) = {2,3};</code></pre>
+</div>
+</div>
+<p>We join a set of lines to a loop with <code>Curve Loop(i) = {p1,p2,...pk};</code> where <code>i</code> is a unique index of the loop and <code>pi</code> are the indices of the lines the loop should connect. Loop <code>2</code> is the bounding box and loop <code>3</code> is the aerofoil. We then join the loops to a surface with <code>Plane Surface(i) = {l1,l2,...lk};</code> where <code>i</code> is a unique index of the surface and <code>li</code> are the indices of the loops the surface should connect. This does not make a visual difference.</p>
+</section>
+<section id="extruding-the-geometry" class="level3">
+<h3 class="anchored" data-anchor-id="extruding-the-geometry">Extruding the geometry</h3>
+<p>OpenFoam does not allow us to use 2D geometries, so we need to extrude the geometry in the z-direction. This is done by the following code:</p>
+<div class="cell" data-execution_count="6">
+<div class="sourceCode cell-code" id="cb9"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(io,<span class="st">"""</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="st">meshThickness=1.0;</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a><span class="st">surfaceVector[] = Extrude {0, 0, meshThickness} {</span></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a><span class="st">    Surface{1};</span></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a><span class="st">    Layers{1};</span></span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a><span class="st">    Recombine;</span></span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a><span class="st">};</span></span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a><span class="st">Physical Volume("internalField") = surfaceVector[1];</span></span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a><span class="st">Physical Surface("frontAndBackPlanes") = {surfaceVector[0],1};</span></span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a><span class="st">Physical Surface("INLET")={surfaceVector[2],surfaceVector[3]};</span></span>
+<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a><span class="st">Physical Surface("OUTLET")={surfaceVector[5]};</span></span>
+<span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a><span class="st">Physical Surface("AIRFOIL")={surfaceVector[7]};</span></span>
+<span id="cb9-13"><a href="#cb9-13" aria-hidden="true" tabindex="-1"></a><span class="st">Physical Surface("WALL")={surfaceVector[4],surfaceVector[6]};</span></span>
+<span id="cb9-14"><a href="#cb9-14" aria-hidden="true" tabindex="-1"></a><span class="st">"""</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>meshThickness=1.0;
+surfaceVector[] = Extrude {0, 0, meshThickness} {
+    Surface{1};
+    Layers{1};
+    Recombine;
+};
+Physical Volume("internalField") = surfaceVector[1];
+Physical Surface("frontAndBackPlanes") = {surfaceVector[0],1};
+Physical Surface("INLET")={surfaceVector[2],surfaceVector[3]};
+Physical Surface("OUTLET")={surfaceVector[5]};
+Physical Surface("AIRFOIL")={surfaceVector[7]};
+Physical Surface("WALL")={surfaceVector[4],surfaceVector[6]};
+</code></pre>
+</div>
+</div>
+<p>We extrude in the direction of the vector <code>{0,0,meshThickness}</code> with <code>Extrude {0, 0, meshThickness} {Surface{1};Layers{1};Recombine;};</code>. <code>Surface{1};</code> tells <code>gmsh</code> we want to extrude the surface with the index one we just created. The <code>Layers{1}</code> command tells Gmsh to only generate one mesh layer. The <code>Recombine</code> command does something I do not understand but is recommended in other tutorials.</p>
+<p>Finally, we need to assign names to surfaces in order to be able to later set boundary conditions in OpenFoam. The keyword <code>Physical</code> means that a name needs to be exported to the mesh. The syntax is <code>Physical Surface{"name_i_choose"}={p1,p2,...pk};</code> where <code>p1,p2,...pk</code> are the indices of the surfaces we want to assign the name to. The same holds for volumes. The names we choose are <code>frontAndBackPlanes</code>, <code>INLET</code>, <code>OUTLET</code>, <code>AIRFOIL</code> and <code>WALL</code>. The names are not important, but they need to be consistent with the names we use in OpenFoam. The <code>Extrude</code> command returns a list of surfaces it created by the extrusion as well as the volume it created. The ordering of these values is described by the <a href="https://gmsh.info/doc/texinfo/gmsh.html#Extrusions">docs</a> as follows:</p>
+<blockquote class="blockquote">
+<p>By default, the list contains the “top” of the extruded entity at index 0 and the extruded entity at index 1, followed by the “sides” of the extruded entity at indices 2, 3, etc.</p>
+</blockquote>
+<p>Now you see why it is important the aerofoil consists of only one loop: Else we would have to assign a few hundred surfaces to a physical surface now. Even now the assignment is not trivial, but you can either try to keep track of the order in which the lines were added to the extrusion or use the visibility tool in <code>gmsh</code>, go to the tree view, select only one physical surface and click <code>Apply</code>. This will show you if you assigned the physical surface to the correct surfaces.</p>
+</section>
+</section>
 </section>
 <section id="results" class="level1">
 <h1>Results</h1>
-<div class="cell" data-execution_count="2">
-<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">DataFrames</span>,<span class="bu">CSV</span></span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>liftData<span class="op">=</span>CSV.<span class="fu">read</span>(<span class="st">"case/allResults.dat"</span>,DataFrame,header<span class="op">=</span><span class="cn">false</span>)[<span class="op">:</span>,[<span class="fl">3</span>,<span class="fl">4</span>]]<span class="op">|&gt;</span><span class="dt">Matrix</span></span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>tangentCoeffs<span class="op">=</span>liftData[<span class="op">:</span>,<span class="fl">1</span>]</span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>normalCoeffs<span class="op">=</span>liftData[<span class="op">:</span>,<span class="fl">2</span>]</span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>angles<span class="op">=</span>[<span class="fl">0.001</span>,<span class="fl">5</span>,<span class="fl">10</span>,<span class="fl">15</span>,<span class="fl">20</span>]</span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">Plots</span></span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>liftCoeffs<span class="op">=</span><span class="fu">cos</span>.(angles)<span class="op">.*</span>normalCoeffs<span class="op">.+</span><span class="fu">sin</span>.(angles)<span class="op">.*</span>tangentCoeffs</span>
-<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(angles,normalCoeffs)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
-<div class="cell-output cell-output-display" data-execution_count="2">
-<p><img src="index_files/figure-html/cell-2-output-1.svg" class="img-fluid"></p>
+<div class="cell" data-execution_count="7">
+<div class="sourceCode cell-code" id="cb11"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">DataFrames</span>,<span class="bu">CSV</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>liftData<span class="op">=</span>CSV.<span class="fu">read</span>(<span class="st">"case/allResults.dat"</span>,DataFrame,header<span class="op">=</span><span class="cn">false</span>)[<span class="op">:</span>,[<span class="fl">3</span>,<span class="fl">4</span>]]<span class="op">|&gt;</span><span class="dt">Matrix</span></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>tangentCoeffs<span class="op">=</span>liftData[<span class="op">:</span>,<span class="fl">1</span>]</span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>normalCoeffs<span class="op">=</span>liftData[<span class="op">:</span>,<span class="fl">2</span>]</span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>angles<span class="op">=</span>[<span class="fl">0.001</span>,<span class="fl">5</span>,<span class="fl">10</span>,<span class="fl">15</span>,<span class="fl">20</span>]</span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">Plots</span></span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a>liftCoeffs<span class="op">=</span><span class="fu">cos</span>.(angles)<span class="op">.*</span>normalCoeffs<span class="op">.+</span><span class="fu">sin</span>.(angles)<span class="op">.*</span>tangentCoeffs</span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(angles,normalCoeffs)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-display" data-execution_count="44">
+<p><img src="index_files/figure-html/cell-7-output-1.svg" class="img-fluid"></p>
 </div>
 </div>
 </section>
