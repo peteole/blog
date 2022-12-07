@@ -234,7 +234,7 @@ FoamFile
 
 dimensions      [ 0 1 -1 0 0 0 0 ];
 
-angle           25;
+angle           10;
 
 magnitude       51.4815;
 
@@ -269,9 +269,77 @@ boundaryField
     }
 }
 ```
-The `#calc` macro can be used to evaluate expressions and I use it to be able to set the angle of attack.
+The `#calc` macro can be used to evaluate expressions and I use it to be able to set the angle of attack. For the other fields, have a look at the [repository](case/0).
+
+# Running the simulation
+Now we can run the simulation by running
+```bash
+./Allclean
+./Allrun
+```
+in the `case` directory. Now calling `paraFoam -builtin` will open a window with the results, here showing the pressure field at 10° angle of attack:
+
+![Pressure field](images/pressure.png)
+
+# Postprocessing
+Finally, we might want to compute force coefficients. To do so, we edit `system/controlDict`:
+```txt
+...
+
+timePrecision   6;
+
+runTimeModifiable true;
+// here the new code starts
+functions
+{
+    calcForceCoefficients
+    {
+        type            forceCoeffs;
+        functionObjectLibs ( "libforces.so" );
+        enabled         true;
+        writeControl   outputTime;
+	    p               p;
+        U               U;
+        rhoInf 1.225;
+        rho         rhoInf;
+        CofR  (0 0 0);
+        patches (AIRFOIL);
+        liftDir (0 1 0);
+        dragDir (1 0 0);
+        magUInf 51.4815;
+        pitchAxis       (0 0 1);
+        lRef            1;
+        Aref           1.0;
+    }
+}
+```
+We are specifying that force coefficients should be computed from the pressure and velocity fields at a certain density, the center of rotation is in the origin (for calculating rotation coefficients), we want to compute forces on the `AIRFOIL` patch/surface, the lift direction is in the y-direction, the drag direction is in the x-direction, the freestream velocity is 51.4815 m/s, the pitch axis is in the z-direction, the reference length is 1 m and the reference area is $1m^2$ (1m length, the extrusion depth is 1m). Now we can run the simulation again and the results will be written to `postProcessing/forceCoeffs/0/forceCoeffs.dat`. The results should look like this for an angle of attack of 10°:
+```txt
+# Force coefficients
+# liftDir     : (0.000000e+00 1.000000e+00 0.000000e+00)
+# dragDir     : (1.000000e+00 0.000000e+00 0.000000e+00)
+# pitchAxis   : (0.000000e+00 0.000000e+00 1.000000e+00)
+# magUInf     : 5.148150e+01
+# lRef        : 1.000000e+00
+# Aref        : 1.000000e+00
+# CofR        : (0.000000e+00 0.000000e+00 0.000000e+00)
+# Time        	Cm            	Cd            	Cl            	Cl(f)         	Cl(r)         
+0             	1.005199e-04	8.689213e-04	2.007876e-04	2.009136e-04	-1.260811e-07
+50            	2.035919e-01	-4.819210e-02	7.422555e-01	5.747196e-01	1.675359e-01
+100           	2.156512e-01	-7.982419e-02	8.268958e-01	6.290991e-01	1.977967e-01
+150           	1.989127e-01	-8.818876e-02	8.174411e-01	6.076333e-01	2.098078e-01
+200           	1.937071e-01	-9.057140e-02	8.183314e-01	6.028728e-01	2.154586e-01
+250           	1.982154e-01	-9.338277e-02	8.350128e-01	6.157218e-01	2.192910e-01
+300           	2.051837e-01	-9.658069e-02	8.551922e-01	6.327799e-01	2.224124e-01
+350           	2.116860e-01	-9.937373e-02	8.728818e-01	6.481269e-01	2.247549e-01
+400           	2.160577e-01	-1.015911e-01	8.854153e-01	6.587653e-01	2.266499e-01
+450           	2.185094e-01	-1.031260e-01	8.930907e-01	6.650547e-01	2.280360e-01
+500           	2.198577e-01	-1.040943e-01	8.976094e-01	6.686624e-01	2.289470e-01
+```
+The coefficients are calculated at each time step of the solver (a time step is more of an iterative step since the simulation is steady). Note that the lift- and drag direction are not set according to the convention, normally the lift is perpendicular to the free stream velocity and not to the aerofoil. One can either fix this in the configuration or by rotating lift and drag by the angle of attack after the simulation, which is done here.
 
 # Results
+
 ```{julia}
 using DataFrames,CSV
 liftData=CSV.read("case/allResults.dat",DataFrame,header=false)[:,[3,4]]|>Matrix

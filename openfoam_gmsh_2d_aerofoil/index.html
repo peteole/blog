@@ -409,7 +409,7 @@ Physical Surface("WALL")={surfaceVector[4],surfaceVector[6]};
 <span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb15-10"><a href="#cb15-10" aria-hidden="true" tabindex="-1"></a>dimensions      [ 0 1 -1 0 0 0 0 ];</span>
 <span id="cb15-11"><a href="#cb15-11" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-12"><a href="#cb15-12" aria-hidden="true" tabindex="-1"></a>angle           25;</span>
+<span id="cb15-12"><a href="#cb15-12" aria-hidden="true" tabindex="-1"></a>angle           10;</span>
 <span id="cb15-13"><a href="#cb15-13" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb15-14"><a href="#cb15-14" aria-hidden="true" tabindex="-1"></a>magnitude       51.4815;</span>
 <span id="cb15-15"><a href="#cb15-15" aria-hidden="true" tabindex="-1"></a></span>
@@ -443,19 +443,86 @@ Physical Surface("WALL")={surfaceVector[4],surfaceVector[6]};
 <span id="cb15-43"><a href="#cb15-43" aria-hidden="true" tabindex="-1"></a>        type            empty;</span>
 <span id="cb15-44"><a href="#cb15-44" aria-hidden="true" tabindex="-1"></a>    }</span>
 <span id="cb15-45"><a href="#cb15-45" aria-hidden="true" tabindex="-1"></a>}</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
-<p>The <code>#calc</code> macro can be used to evaluate expressions and I use it to be able to set the angle of attack.</p>
+<p>The <code>#calc</code> macro can be used to evaluate expressions and I use it to be able to set the angle of attack. For the other fields, have a look at the <a href="case/0">repository</a>.</p>
+</section>
+<section id="running-the-simulation" class="level1">
+<h1>Running the simulation</h1>
+<p>Now we can run the simulation by running</p>
+<div class="sourceCode" id="cb16"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="ex">./Allclean</span></span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a><span class="ex">./Allrun</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p>in the <code>case</code> directory. Now calling <code>paraFoam -builtin</code> will open a window with the results, here showing the pressure field at 10° angle of attack:</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="images/pressure.png" class="img-fluid figure-img"></p>
+<p></p><figcaption class="figure-caption">Pressure field</figcaption><p></p>
+</figure>
+</div>
+</section>
+<section id="postprocessing" class="level1">
+<h1>Postprocessing</h1>
+<p>Finally, we might want to compute force coefficients. To do so, we edit <code>system/controlDict</code>:</p>
+<div class="sourceCode" id="cb17"><pre class="sourceCode txt code-with-copy"><code class="sourceCode default"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a>...</span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>timePrecision   6;</span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a>runTimeModifiable true;</span>
+<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a>// here the new code starts</span>
+<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a>functions</span>
+<span id="cb17-8"><a href="#cb17-8" aria-hidden="true" tabindex="-1"></a>{</span>
+<span id="cb17-9"><a href="#cb17-9" aria-hidden="true" tabindex="-1"></a>    calcForceCoefficients</span>
+<span id="cb17-10"><a href="#cb17-10" aria-hidden="true" tabindex="-1"></a>    {</span>
+<span id="cb17-11"><a href="#cb17-11" aria-hidden="true" tabindex="-1"></a>        type            forceCoeffs;</span>
+<span id="cb17-12"><a href="#cb17-12" aria-hidden="true" tabindex="-1"></a>        functionObjectLibs ( "libforces.so" );</span>
+<span id="cb17-13"><a href="#cb17-13" aria-hidden="true" tabindex="-1"></a>        enabled         true;</span>
+<span id="cb17-14"><a href="#cb17-14" aria-hidden="true" tabindex="-1"></a>        writeControl   outputTime;</span>
+<span id="cb17-15"><a href="#cb17-15" aria-hidden="true" tabindex="-1"></a>        p               p;</span>
+<span id="cb17-16"><a href="#cb17-16" aria-hidden="true" tabindex="-1"></a>        U               U;</span>
+<span id="cb17-17"><a href="#cb17-17" aria-hidden="true" tabindex="-1"></a>        rhoInf 1.225;</span>
+<span id="cb17-18"><a href="#cb17-18" aria-hidden="true" tabindex="-1"></a>        rho         rhoInf;</span>
+<span id="cb17-19"><a href="#cb17-19" aria-hidden="true" tabindex="-1"></a>        CofR  (0 0 0);</span>
+<span id="cb17-20"><a href="#cb17-20" aria-hidden="true" tabindex="-1"></a>        patches (AIRFOIL);</span>
+<span id="cb17-21"><a href="#cb17-21" aria-hidden="true" tabindex="-1"></a>        liftDir (0 1 0);</span>
+<span id="cb17-22"><a href="#cb17-22" aria-hidden="true" tabindex="-1"></a>        dragDir (1 0 0);</span>
+<span id="cb17-23"><a href="#cb17-23" aria-hidden="true" tabindex="-1"></a>        magUInf 51.4815;</span>
+<span id="cb17-24"><a href="#cb17-24" aria-hidden="true" tabindex="-1"></a>        pitchAxis       (0 0 1);</span>
+<span id="cb17-25"><a href="#cb17-25" aria-hidden="true" tabindex="-1"></a>        lRef            1;</span>
+<span id="cb17-26"><a href="#cb17-26" aria-hidden="true" tabindex="-1"></a>        Aref           1.0;</span>
+<span id="cb17-27"><a href="#cb17-27" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb17-28"><a href="#cb17-28" aria-hidden="true" tabindex="-1"></a>}</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p>We are specifying that force coefficients should be computed from the pressure and velocity fields at a certain density, the center of rotation is in the origin (for calculating rotation coefficients), we want to compute forces on the <code>AIRFOIL</code> patch/surface, the lift direction is in the y-direction, the drag direction is in the x-direction, the freestream velocity is 51.4815 m/s, the pitch axis is in the z-direction, the reference length is 1 m and the reference area is <span class="math inline">\(1m^2\)</span> (1m length, the extrusion depth is 1m). Now we can run the simulation again and the results will be written to <code>postProcessing/forceCoeffs/0/forceCoeffs.dat</code>. The results should look like this for an angle of attack of 10°:</p>
+<div class="sourceCode" id="cb18"><pre class="sourceCode txt code-with-copy"><code class="sourceCode default"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a># Force coefficients</span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a># liftDir     : (0.000000e+00 1.000000e+00 0.000000e+00)</span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a># dragDir     : (1.000000e+00 0.000000e+00 0.000000e+00)</span>
+<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a># pitchAxis   : (0.000000e+00 0.000000e+00 1.000000e+00)</span>
+<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a># magUInf     : 5.148150e+01</span>
+<span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a># lRef        : 1.000000e+00</span>
+<span id="cb18-7"><a href="#cb18-7" aria-hidden="true" tabindex="-1"></a># Aref        : 1.000000e+00</span>
+<span id="cb18-8"><a href="#cb18-8" aria-hidden="true" tabindex="-1"></a># CofR        : (0.000000e+00 0.000000e+00 0.000000e+00)</span>
+<span id="cb18-9"><a href="#cb18-9" aria-hidden="true" tabindex="-1"></a># Time          Cm              Cd              Cl              Cl(f)           Cl(r)         </span>
+<span id="cb18-10"><a href="#cb18-10" aria-hidden="true" tabindex="-1"></a>0               1.005199e-04    8.689213e-04    2.007876e-04    2.009136e-04    -1.260811e-07</span>
+<span id="cb18-11"><a href="#cb18-11" aria-hidden="true" tabindex="-1"></a>50              2.035919e-01    -4.819210e-02   7.422555e-01    5.747196e-01    1.675359e-01</span>
+<span id="cb18-12"><a href="#cb18-12" aria-hidden="true" tabindex="-1"></a>100             2.156512e-01    -7.982419e-02   8.268958e-01    6.290991e-01    1.977967e-01</span>
+<span id="cb18-13"><a href="#cb18-13" aria-hidden="true" tabindex="-1"></a>150             1.989127e-01    -8.818876e-02   8.174411e-01    6.076333e-01    2.098078e-01</span>
+<span id="cb18-14"><a href="#cb18-14" aria-hidden="true" tabindex="-1"></a>200             1.937071e-01    -9.057140e-02   8.183314e-01    6.028728e-01    2.154586e-01</span>
+<span id="cb18-15"><a href="#cb18-15" aria-hidden="true" tabindex="-1"></a>250             1.982154e-01    -9.338277e-02   8.350128e-01    6.157218e-01    2.192910e-01</span>
+<span id="cb18-16"><a href="#cb18-16" aria-hidden="true" tabindex="-1"></a>300             2.051837e-01    -9.658069e-02   8.551922e-01    6.327799e-01    2.224124e-01</span>
+<span id="cb18-17"><a href="#cb18-17" aria-hidden="true" tabindex="-1"></a>350             2.116860e-01    -9.937373e-02   8.728818e-01    6.481269e-01    2.247549e-01</span>
+<span id="cb18-18"><a href="#cb18-18" aria-hidden="true" tabindex="-1"></a>400             2.160577e-01    -1.015911e-01   8.854153e-01    6.587653e-01    2.266499e-01</span>
+<span id="cb18-19"><a href="#cb18-19" aria-hidden="true" tabindex="-1"></a>450             2.185094e-01    -1.031260e-01   8.930907e-01    6.650547e-01    2.280360e-01</span>
+<span id="cb18-20"><a href="#cb18-20" aria-hidden="true" tabindex="-1"></a>500             2.198577e-01    -1.040943e-01   8.976094e-01    6.686624e-01    2.289470e-01</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p>The coefficients are calculated at each time step of the solver (a time step is more of an iterative step since the simulation is steady). Note that the lift- and drag direction are not set according to the convention, normally the lift is perpendicular to the free stream velocity and not to the aerofoil. One can either fix this in the configuration or by rotating lift and drag by the angle of attack after the simulation, which is done here.</p>
 </section>
 <section id="results" class="level1">
 <h1>Results</h1>
 <div class="cell" data-execution_count="7">
-<div class="sourceCode cell-code" id="cb16"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">DataFrames</span>,<span class="bu">CSV</span></span>
-<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>liftData<span class="op">=</span>CSV.<span class="fu">read</span>(<span class="st">"case/allResults.dat"</span>,DataFrame,header<span class="op">=</span><span class="cn">false</span>)[<span class="op">:</span>,[<span class="fl">3</span>,<span class="fl">4</span>]]<span class="op">|&gt;</span><span class="dt">Matrix</span></span>
-<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>tangentCoeffs<span class="op">=</span>liftData[<span class="op">:</span>,<span class="fl">1</span>]</span>
-<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>normalCoeffs<span class="op">=</span>liftData[<span class="op">:</span>,<span class="fl">2</span>]</span>
-<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>angles<span class="op">=</span>[<span class="fl">0.001</span>,<span class="fl">5</span>,<span class="fl">10</span>,<span class="fl">15</span>,<span class="fl">20</span>]</span>
-<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">Plots</span></span>
-<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a>liftCoeffs<span class="op">=</span><span class="fu">cos</span>.(angles)<span class="op">.*</span>normalCoeffs<span class="op">.+</span><span class="fu">sin</span>.(angles)<span class="op">.*</span>tangentCoeffs</span>
-<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(angles,normalCoeffs)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb19"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">DataFrames</span>,<span class="bu">CSV</span></span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>liftData<span class="op">=</span>CSV.<span class="fu">read</span>(<span class="st">"case/allResults.dat"</span>,DataFrame,header<span class="op">=</span><span class="cn">false</span>)[<span class="op">:</span>,[<span class="fl">3</span>,<span class="fl">4</span>]]<span class="op">|&gt;</span><span class="dt">Matrix</span></span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a>tangentCoeffs<span class="op">=</span>liftData[<span class="op">:</span>,<span class="fl">1</span>]</span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a>normalCoeffs<span class="op">=</span>liftData[<span class="op">:</span>,<span class="fl">2</span>]</span>
+<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a>angles<span class="op">=</span>[<span class="fl">0.001</span>,<span class="fl">5</span>,<span class="fl">10</span>,<span class="fl">15</span>,<span class="fl">20</span>]</span>
+<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">Plots</span></span>
+<span id="cb19-7"><a href="#cb19-7" aria-hidden="true" tabindex="-1"></a>liftCoeffs<span class="op">=</span><span class="fu">cos</span>.(angles)<span class="op">.*</span>normalCoeffs<span class="op">.+</span><span class="fu">sin</span>.(angles)<span class="op">.*</span>tangentCoeffs</span>
+<span id="cb19-8"><a href="#cb19-8" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(angles,normalCoeffs)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-display" data-execution_count="44">
 <p><img src="index_files/figure-html/cell-7-output-1.svg" class="img-fluid"></p>
 </div>
