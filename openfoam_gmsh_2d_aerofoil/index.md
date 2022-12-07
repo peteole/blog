@@ -235,6 +235,164 @@ extrusion or use the visibility tool in `gmsh`, go to the tree view,
 select only one physical surface and click `Apply`. This will show you
 if you assigned the physical surface to the correct surfaces.
 
+## Meshing the geometry
+
+Now we have the geometry ready to be meshed. Running the geometry
+generation script will create a file `aerofoil.geo` in the current
+directory. We can now run `gmsh` on this file to create the mesh:
+
+``` bash
+julia mesh_generation.jl
+gmsh -3 aerofoil.geo -format msh2
+```
+
+Here, the `-3` flag tells `gmsh` to create a 3D mesh. The `-format msh2`
+flag tells `gmsh` to create a mesh in the `msh2` format instead of the
+newest `msh4` format. This is necessary since else we will not be able
+to convert the mesh to the `OpenFoam` format, resulting in hard-to-debug
+errors. The resulting mesh file `aerofoil.msh` can be viewed by typing
+`gmsh aerofoil.msh` in the terminal. The result should look like this:
+
+![Mesh](images/mesh.png)
+
+## Converting the mesh to OpenFoam format
+
+Now we have the mesh in the `msh2` format by running
+
+``` bash
+# load OpenFoam into context
+source /opt/OpenFOAM/OpenFOAM-10/etc/bashrc
+gmshToFoam aerofoil.msh
+```
+
+This will create a directory `constant/polyMesh` with the mesh in the
+`OpenFoam` format. Now have a look at the `constanc/boundary` file. It
+should look like this:
+
+``` txt
+FoamFile
+{
+    format          ascii;
+    class           polyBoundaryMesh;
+    location        "constant/polyMesh";
+    object          boundary;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+
+5 // entry0
+(
+    frontAndBackPlanes
+    {
+        type            patch;
+        physicalType    patch;
+        nFaces          33288;
+        startFace       24701;
+    }
+    INLET
+    {
+        type            patch;
+        physicalType    patch;
+        nFaces          54;
+        startFace       57989;
+    }
+    WALL
+    {
+        type            patch;
+        physicalType    patch;
+        nFaces          34;
+        startFace       58043;
+    }
+    OUTLET
+    {
+        type            patch;
+        physicalType    patch;
+        nFaces          34;
+        startFace       58077;
+    }
+    AIRFOIL
+    {
+        type            patch;
+        physicalType    patch;
+        nFaces          408;
+        startFace       58111;
+    }
+)
+```
+
+Now we need to assign the types of the `frontAndBackPlanes` to `empty`,
+telling `OpenFoam` that the geometry is “pseudo-2d” and that of the
+`AIRFOIL` to `wall`. We can do this either by editing the file manually
+or by running
+
+``` bash
+function setBoundaryType {
+    foamDictionary constant/polyMesh/boundary -entry entry0/$1/type -set $2
+}
+setBoundaryType frontAndBackPlanes empty
+setBoundaryType AIRFOIL wall 
+```
+
+And now we have our mesh!
+
+# Setting boundary conditions
+
+Boundary conditions are set in the `0` directory. Here we reference the
+names we gave to the physical surfaces earlier and set values
+accordingly. For example the velocity boundary conditions are set as
+follows:
+
+``` txt
+//0/U
+FoamFile
+{
+    format          ascii;
+    class           volVectorField;
+    object          U;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+dimensions      [ 0 1 -1 0 0 0 0 ];
+
+angle           25;
+
+magnitude       51.4815;
+
+radAngle        #calc "degToRad($angle)";
+
+internalField   uniform ( #calc "$magnitude*cos($radAngle)" #calc "$magnitude*sin($radAngle)" 0 );
+
+boundaryField
+{
+    INLET
+    {
+        type            freestreamVelocity;
+        freestreamValue $internalField;
+    }
+    OUTLET
+    {
+        type            freestreamVelocity;
+        freestreamValue $internalField;
+    }
+    WALL
+    {
+        type            freestreamVelocity;
+        freestreamValue $internalField;
+    }
+    AIRFOIL
+    {
+        type            noSlip;
+    }
+    frontAndBackPlanes
+    {
+        type            empty;
+    }
+}
+```
+
+The `#calc` macro can be used to evaluate expressions and I use it to be
+able to set the angle of attack.
+
 # Results
 
 ``` julia
