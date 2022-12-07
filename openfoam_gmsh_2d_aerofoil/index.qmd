@@ -343,7 +343,7 @@ The coefficients are calculated at each time step of the solver (a time step is 
 ```{julia}
 using DataFrames,CSV
 liftData=CSV.read("case/allResults.dat",DataFrame,header=false)[:,[1,4,5]]|>Matrix
-#display(liftData)
+display(liftData)
 tangentCoeffs=liftData[:,3]
 normalCoeffs=liftData[:,2]
 angles=liftData[:,1]

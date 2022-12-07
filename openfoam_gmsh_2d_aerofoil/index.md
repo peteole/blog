@@ -493,7 +493,7 @@ the simulation, which is done here.
 ``` julia
 using DataFrames,CSV
 liftData=CSV.read("case/allResults.dat",DataFrame,header=false)[:,[1,4,5]]|>Matrix
-#display(liftData)
+display(liftData)
 tangentCoeffs=liftData[:,3]
 normalCoeffs=liftData[:,2]
 angles=liftData[:,1]
@@ -505,4 +505,12 @@ dragCoeffs=sin.(radAngles).*normalCoeffs.+cos.(radAngles).*tangentCoeffs
 plot(angles,[liftCoeffs,dragCoeffs],label=["Lift coefficient" "Drag coefficient"],xlabel="Angle of attack [°]",ylabel="Coefficient",legend=:bottomright)
 ```
 
-![](index_files/figure-markdown_strict/cell-7-output-1.png)
+    6×3 Matrix{Float64}:
+      0.001  -0.000702593   0.0124102
+      5.0     0.102505     -0.0154971
+     10.0     0.190889     -0.0937441
+     15.0     0.273154     -0.204022
+     20.0     0.449358     -0.295367
+     25.0     0.703254     -0.155565
+
+![](index_files/figure-markdown_strict/cell-7-output-2.png)
