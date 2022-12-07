@@ -1,0 +1,14 @@
+*.gz
+log.*
+*~
+processor*
+[0-9]*
+[0-9]*.[0-9]*
+!0.org
+constant/extendedFeatureEdgeMesh
+*.eMesh
+!constant/polyMesh/blockMeshDict
+constant/cellToRegion
+*.OpenFOAM
+dynamicCode
+!postProcessing/**

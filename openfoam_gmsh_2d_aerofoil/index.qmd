@@ -1,0 +1,46 @@
+---
+title: "CFD modeling of flow behavior over NACA0012 airfoil for wind turbine applications"
+author: Ole Petersen
+date: now
+date-format: medium
+jupyter: julia-1.8
+fontsize: 12px
+latex-auto-install: true
+keywords:
+    - CFD
+    - Openfoam
+    - gmsh
+    - 2d
+abstract: |
+    In this tutorial, I will show from end to end how to do a 2d CFD simulation of an aerofoil including the generation of the geometry, the meshing using `gmsh` and the simulation using `OpenFoam`.
+execute: 
+  cache: true
+  daemon: 3600
+format:
+  pdf:
+    geometry:
+      - top=25mm
+      - bottom=20mm
+      - left=20mm
+  latex:
+    geometry:
+      - top=30mm
+      - bottom=30mm
+      - left=20mm
+documentclass: article
+---
+
+# Introduction
+The starting point is the [NACA0012 tutorial case in OpenFoam](https://www.openfoam.com/documentation/guides/latest/doc/verification-validation-naca0012-airfoil-2d.html). Copy this case to your new working directory. In this tutorial, we will have a look at how to simulate your custom 2d geometry as the tutorial is intransparent about how the mesh was generated.
+
+# Results
+```{julia}
+using DataFrames,CSV
+liftData=CSV.read("case/allResults.dat",DataFrame,header=false)[:,[3,4]]|>Matrix
+tangentCoeffs=liftData[:,1]
+normalCoeffs=liftData[:,2]
+angles=[0.001,5,10,15,20]
+using Plots
+liftCoeffs=cos.(angles).*normalCoeffs.+sin.(angles).*tangentCoeffs
+plot(angles,normalCoeffs)
+```
