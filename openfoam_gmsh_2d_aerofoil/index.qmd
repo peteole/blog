@@ -22,9 +22,6 @@ format:
       - top=25mm
       - bottom=20mm
       - left=20mm
-    keep-md: true
-  html: 
-    keep-md: true
   latex:
     geometry:
       - top=30mm
