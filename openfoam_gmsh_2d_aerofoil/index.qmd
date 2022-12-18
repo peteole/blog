@@ -1,5 +1,5 @@
 ---
-title: "CFD modeling of flow behavior over NACA0012 airfoil for wind turbine applications"
+title: CFD modeling of the flow behavior over NACA0012 airfoil
 author: Ole Petersen
 date: now
 date-format: medium
@@ -22,6 +22,9 @@ format:
       - top=25mm
       - bottom=20mm
       - left=20mm
+    keep-md: true
+  html: 
+    keep-md: true
   latex:
     geometry:
       - top=30mm
@@ -152,6 +155,15 @@ The resulting mesh file `aerofoil.msh` can be viewed by typing `gmsh aerofoil.ms
 
 ![Mesh](images/mesh.png)
 
+However, you might realize the cells in this mesh have a triangular cross-section. My experience is that this is less numerically stable in practice. Therefore I added
+
+```{text}
+Recombine Surface{1};
+```
+to the `gmsh` geometry. This causes neighbouring triangular cells to be recombined into more effective shapes. The result looks like this:
+
+![Recombined mesh](images/mesh_reconbined.png)
+
 ## Converting the mesh to OpenFoam format
 Now we have the mesh in the `msh2` format by running
 ```bash
@@ -271,6 +283,10 @@ boundaryField
 ```
 The `#calc` macro can be used to evaluate expressions and I use it to be able to set the angle of attack. For the other fields, have a look at the [repository](case/0).
 
+# Turbulence models
+I set up this case to work with the k-epsilon, k-omega and Spallart Allamars turbulence models. These use additional fields to model turbulence. The initial conditions for these fields are also set up in the [0-directory]
+(case/0). Since the `nut` field is shared between turbulence models, the boundary conditions must be changed when setting a turbulence model, uncomment the correct values in the file.
+
 # Running the simulation
 Now we can run the simulation by running
 ```bash
@@ -339,32 +355,109 @@ We are specifying that force coefficients should be computed from the pressure a
 The coefficients are calculated at each time step of the solver (a time step is more of an iterative step since the simulation is steady). Note that the lift- and drag direction are not set according to the convention, normally the lift is perpendicular to the free stream velocity and not to the aerofoil. One can either fix this in the configuration or by rotating lift and drag by the angle of attack after the simulation, which is done here.
 
 # Results
+## Single angle of attack
+The following [script](case/run_at_angle.sh) runs the simulation at the angle of attack given in the argument:
+
+```{bash}
+#!/bin/bash
+cd "$(dirname "$0")" # change into location of this script
+echo "Running airfoil simulation at $1 degrees at location $(pwd)"
+# source /opt/OpenFOAM/OpenFOAM-10/etc/bashrc
+foamDictionary 0/U -entry angle -set $1
+./Allclean
+./Allrun
+if [[ -z "${SILENT}" ]]; then
+    paraFoam -builtin
+fi
+```
+
+It uses the `foamDirectory` command line utility to set the correct angle of attack (does work for all angles except $0$), runs the case and opens paraFoam to display the result if the `SILENT` environment variable has not been set. The resuls my look like this:
+
+![Velocity field for 12° angle of attack](images/U_12.png)
+
+You can also use the `Filters->Common->Streamtracer` utility in paraFoam to generate streamlines:
+
+![Streamlines for 12° angle of attack](images/ST_fine_12.png)
+
+## Characteristic curves
+The following [script](case/run_in_parallel.sh) runs the simulation at multiple angles of attack in parallel, copying results to a single file calles `allResults.dat`:
+
+```{bash}
+angles=(0.001 2.5 5 7.5 10 12 15 20 25 30)
+./write_mesh_properties.sh
+
+for angle in "${angles[@]}"; do
+    cp -r . /tmp/airfoil_$angle
+    SILENT=1 /tmp/airfoil_$angle/run_at_angle.sh $angle &
+done
+trap "trap - SIGTERM && kill -- -$$" SIGINT SIGTERM EXIT
+wait
+name=$(jq '.name' config.json | tr -d '"')
+turbulence_model=$(jq '.turbulence_model' config.json | tr -d '"')
+mkdir -p results/$turbulence_model
+dir="results/$turbulence_model/$name"
+rm -r $dir
+mkdir $dir
+cp config.json $dir/config.json
+for angle in "${angles[@]}"; do
+    echo -n -e "$angle\t\t" >> $dir/allResults.dat
+    tail -n 1 /tmp/airfoil_$angle/postProcessing/calcForceCoefficients/0/forceCoeffs.dat >> $dir/allResults.dat
+done
+```
+It copies the case directory to a new temporary directory for each angle of attack, runs the `run_at_angle.sh` script, waits for all the simulations to finish and writes the last line of the `calcForceCoefficients` postprocessing output to a file called `allResults.dat`. The directory to write the results to is determined by the contents of the [config.json](case/config.json) file which allows you to save the results for multiple configurations. [write_esh_properties.sh](case/write_mesh_properties.sh) updates the config file with the current configuration of the mesh.
+
+The results can be plotted like this:
 
 ```{julia}
-using DataFrames,CSV
-dataString=open(f->read(f, String), "case/allResults.dat")
-filteredString=""
-lastWasSpace=false
-for c in dataString
-    if c==' '||c=='\t'
-        if !lastWasSpace
-            filteredString=filteredString*","
+using DataFrames,CSV, JSON3, Plots
+turbModels=readdir("case/results")
+resultData::Dict{String,Dict{String,DataFrame}}=Dict()
+configs::Dict{String,Dict{String,Any}}=Dict()
+for turbModel in turbModels
+    resultData[turbModel]=Dict()
+    configs[turbModel]=Dict()
+    result_names=readdir("case/results/$turbModel")
+    for result_name in result_names
+        config=JSON3.read(read("case/results/$turbModel/$result_name/config.json"))
+        configs[turbModel][result_name]=config
+        #display(config["cells"])
+        dataString=open(f->read(f, String), "case/results/$turbModel/$result_name/allResults.dat")
+        # remove whitespaces and replace them with commas
+        filteredString=reduce(dataString;init="") do l,r
+          (r==' '||r=='\t') ? (l[end]==',' ? l : l*",") : l*r
         end
-        lastWasSpace=true
-    else
-        filteredString=filteredString*c
-        lastWasSpace=false
+        liftData=CSV.File(IOBuffer(filteredString), header=false) |> DataFrame |> Matrix
+        #display(liftData)
+        tangentCoeffs=liftData[:,4]
+        normalCoeffs=liftData[:,5]
+        angles=liftData[:,1]
+        radAngles=deg2rad.(angles)
+        liftCoeffs=cos.(radAngles).*normalCoeffs.-sin.(radAngles).*tangentCoeffs
+        dragCoeffs=sin.(radAngles).*normalCoeffs.+cos.(radAngles).*tangentCoeffs
+        df=DataFrame(angle=angles, tangent_coefficient=tangentCoeffs, normal_coefficient=normalCoeffs, lift_coefficient=liftCoeffs, drag_coefficient=dragCoeffs)
+        #display(df)
+        resultData[turbModel][result_name]=df
     end
 end
-display(filteredString)
-liftData=CSV.File(IOBuffer(filteredString), header=false) |> DataFrame |> Matrix
-display(liftData)
-tangentCoeffs=liftData[:,4]
-normalCoeffs=liftData[:,5]
-angles=liftData[:,1]
-radAngles=deg2rad.(angles)
-using Plots
-liftCoeffs=cos.(radAngles).*normalCoeffs.-sin.(radAngles).*tangentCoeffs
-dragCoeffs=sin.(radAngles).*normalCoeffs.+cos.(radAngles).*tangentCoeffs
-plot(angles,[liftCoeffs,dragCoeffs],label=["Lift coefficient" "Drag coefficient"],xlabel="Angle of attack [°]",ylabel="Coefficient",legend=:bottomright)
+p_lift=plot(label="Lift coefficient", xlabel="Angle of attack [deg]", ylabel="\$C_L\$", title="Lift coefficient for k-epsilon model", ylims=(0,1.5))
+plots=[]
+for (result_name, result) in resultData["kEpsilon"]
+  plot!(p_lift,result.angle, result.lift_coefficient, label=configs["kEpsilon"][result_name]["name"])
+end
+display(p_lift)
 ```
+
+You can see that the finest structured mesh did not converge.
+
+Similarly, the drag coefficients can be plotted like this:
+
+```{julia}
+p_drag=plot(label="Drag coefficient", xlabel="Angle of attack [deg]", ylabel="\$C_D\$", title="Drag coefficient for k-epsilon model", ylims=(0,1.5))
+plots=[]
+for (result_name, result) in resultData["kEpsilon"]
+  plot!(p_drag,result.angle, result.drag_coefficient, label=configs["kEpsilon"][result_name]["name"])
+end
+display(p_drag)
+```
+
+I hope this post made it a bit easier to understand how a 2D CFD simulation of an external flow can be performed using `OpenFoam` and `gmsh`!
