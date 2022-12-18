@@ -131,7 +131,7 @@ Physical Surface("AIRFOIL")={surfaceVector[7]};
 Physical Surface("WALL")={surfaceVector[4],surfaceVector[6]};
 """)
 ```
-We extrude in the direction of the vector `{0,0,meshThickness}` with `Extrude {0, 0, meshThickness} {Surface{1};Layers{1};Recombine;};`. `Surface{1};` tells `gmsh` we want to extrude the surface with the index one we just created. The `Layers{1}` command tells Gmsh to only generate one mesh layer. The `Recombine` command does something I do not understand but is recommended in other tutorials.
+We extrude in the direction of the vector `{0,0,meshThickness}` with `Extrude {0, 0, meshThickness} {Surface{1};Layers{1};Recombine;};`. `Surface{1};` tells `gmsh` we want to extrude the surface with the index one we just created. The `Layers{1}` command tells Gmsh to only generate one mesh layer. The `Recombine` command instructs `gmsh` to merge neighboring cells together after the extrusion so that the result is a prism instead of a set of tetrahedra.
 
 Finally, we need to assign names to surfaces in order to be able to later set boundary conditions in OpenFoam. The keyword `Physical` means that a name needs to be exported to the mesh. The syntax is `Physical Surface{"name_i_choose"}={p1,p2,...pk};` where `p1,p2,...pk` are the indices of the surfaces we want to assign the name to. The same holds for volumes. The names we choose are `frontAndBackPlanes`, `INLET`, `OUTLET`, `AIRFOIL` and `WALL`. The names are not important, but they need to be consistent with the names we use in OpenFoam.
 The `Extrude` command returns a list of surfaces it created by the extrusion as well as the volume it created. The ordering of these values is described by the [docs](https://gmsh.info/doc/texinfo/gmsh.html#Extrusions) as follows:

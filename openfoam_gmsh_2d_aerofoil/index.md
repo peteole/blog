@@ -206,8 +206,9 @@ We extrude in the direction of the vector `{0,0,meshThickness}` with
 `Extrude {0, 0, meshThickness} {Surface{1};Layers{1};Recombine;};`.
 `Surface{1};` tells `gmsh` we want to extrude the surface with the index
 one we just created. The `Layers{1}` command tells Gmsh to only generate
-one mesh layer. The `Recombine` command does something I do not
-understand but is recommended in other tutorials.
+one mesh layer. The `Recombine` command instructs `gmsh` to merge
+neighboring cells together after the extrusion so that the result is a
+prism instead of a set of tetrahedra.
 
 Finally, we need to assign names to surfaces in order to be able to
 later set boundary conditions in OpenFoam. The keyword `Physical` means
