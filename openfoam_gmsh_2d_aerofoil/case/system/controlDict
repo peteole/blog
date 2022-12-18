@@ -22,7 +22,7 @@ startTime       0;
 
 stopAt          endTime;
 
-endTime         500;
+endTime         3000;
 
 deltaT          1;
 
@@ -52,9 +52,9 @@ functions
         functionObjectLibs ( "libforces.so" );
         enabled         true;
         writeControl   outputTime;
-	      pName               p;
+	    pName               p;
         UName               U;
-	      rhoInf  1.225;
+	    rhoInf  1.225;
         rho         rhoInf;
         CofR  (0 0 0);
         patches (AIRFOIL);
@@ -65,7 +65,7 @@ functions
         functionObjectLibs ( "libforces.so" );
         enabled         true;
         writeControl   outputTime;
-	      p               p;
+	    p               p;
         U               U;
         rhoInf 1.225;
         rho         rhoInf;

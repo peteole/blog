@@ -12,3 +12,9 @@ constant/cellToRegion
 *.OpenFOAM
 dynamicCode
 !postProcessing/**
+postProcessing/yPlus
+!0
+0/vorticity
+0/yPlus
+constant/polyMesh
+aerofoil_str.*

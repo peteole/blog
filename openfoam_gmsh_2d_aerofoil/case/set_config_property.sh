@@ -1,0 +1,1 @@
+echo $(jq ".$1=\"$2\"" config.json) > config.json
