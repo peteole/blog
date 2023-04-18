@@ -1,0 +1,39 @@
+---
+title: "Optimizing the passage of traffic lights"
+author: Ole Petersen
+date: now
+date-format: medium
+jupyter: julia-1.9
+fontsize: 12px
+latex-auto-install: true
+keywords:
+    - Probability Theory
+    - Optimization
+abstract: |
+    In this paper, an optimal strategy for passing red traffic lights is found.
+execute: 
+  cache: true
+  daemon: 3600
+format:
+  pdf:
+    geometry:
+      - top=25mm
+      - bottom=20mm
+      - left=20mm
+  latex:
+    geometry:
+      - top=30mm
+      - bottom=30mm
+      - left=20mm
+documentclass: article
+---
+
+## Quarto
+
+Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
+
+
+```{julia}
+using Plots
+plot(rand(100))
+```
