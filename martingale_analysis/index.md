@@ -3,8 +3,9 @@ Ole Petersen
 
 Imagine you are in a casino with your best friend and your life savings,
 playing roulette. Your friend has an awesome idea: “Let’s always bet on
-red. If we lose, we double our bet. Once we win, we have made back all
-our losses and we start over with our initial bet. We can’t lose!”
+red, so we win with a 50% chance in each round. If we lose, we double
+our bet in the next round until we win. Once we win, we have made back
+all our losses and we start over with our initial bet. We can’t lose!”
 
 You are a bit sceptical. In every step, you an equal chance of doubling
 your bet or losing it, so in expectation, your wealth should stay
@@ -14,7 +15,9 @@ Let’s simulate the betting strategy and see what happens. You don’t want
 to loose it all, so you start with 100$ and begin with the smallest
 possible bet of 1$. This is done for up to 1000 rounds. If you cannot
 afford the bet anymore, you leave with what is left, dropping out of the
-game. This logic is implemented in the following julia code.
+game. This logic is also called the [Martingale betting
+system](https://en.wikipedia.org/wiki/Martingale_(betting_system)), and
+can be implemented as follows:
 
 ``` julia
 function simulate(initial_money,minimum_bet,rounds)
