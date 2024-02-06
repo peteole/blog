@@ -1,0 +1,19 @@
+{
+    "grammarly.selectors": [
+        {
+            "language": "markdown",
+            "scheme": "file",
+            "pattern": "martingale_analysis/index.md"
+        },
+        {
+            "language": "markdown",
+            "scheme": "vscode-notebook-cell",
+            "pattern": "/Users/ole/Documents/software/blog/martingale_analysis/index.ipynb"
+        },
+        {
+            "language": "markdown",
+            "scheme": "vscode-notebook-cell",
+            "pattern": "/Users/ole/Documents/software/blog/martingale_analysis/index.ipynb"
+        }
+    ]
+}
