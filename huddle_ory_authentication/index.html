@@ -1,0 +1,994 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.4.550">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>index</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="index_files/libs/clipboard/clipboard.min.js"></script>
+<script src="index_files/libs/quarto-html/quarto.js"></script>
+<script src="index_files/libs/quarto-html/popper.min.js"></script>
+<script src="index_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="index_files/libs/quarto-html/anchor.min.js"></script>
+<link href="index_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="index_files/libs/quarto-html/quarto-syntax-highlighting.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="index_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="index_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="index_files/libs/bootstrap/bootstrap.min.css" rel="stylesheet" id="quarto-bootstrap" data-mode="light">
+
+
+</head>
+
+<body class="fullcontent">
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+
+<main class="content" id="quarto-document-content">
+
+
+
+
+<p>In this series, we are exploring the steps we took to build a <a href="https://huddle.hsg.fs.tum.de">student project platform</a> where students can share their sideprojects and explore what their peers are doing. After looking at the <a href="https://dev.to/peteole/how-we-built-a-student-project-platform-using-graphql-react-golang-ory-kratos-and-kubernetes-part-1-19jg">architecture of our GraphQL backend</a> and <a href="https://dev.to/peteole/how-we-built-a-student-project-platform-using-graphql-react-golang-ory-kratos-and-kubernetes-part-1-19jg">how we consume it in a typesafe way</a>, we will take a deeper dive into authentication. # High-level architecture We have three software components that are involved in the authentication process:</p>
+<ol type="1">
+<li>The React UI. The user enters their password here and wants to see their protected data</li>
+<li>The GraphQL API. The API wants to verify that requests that need authentication really come from the user the request claims to come from. Located in our kubernetes cluster</li>
+<li>Ory Kratos. Kratos manages user login credentials. Located in our kubernetes cluster, too.</li>
+</ol>
+<p>Since I have been confused by it in the beginning, I created an image of all the messages sent in a typical login: <img src="https://dev-to-uploads.s3.amazonaws.com/uploads/articles/7jbo8myhuflr9qm9tfxw.png" class="img-fluid" alt="Images sent during login"></p>
+<section id="flows" class="level2">
+<h2 class="anchored" data-anchor-id="flows">Flows</h2>
+<p>Ory Kratos often works with so-called <em>flows</em>. A flow is a process that my consist of several steps such as account recovery or login (with MFA in the future). For login with username/password this may seem like an overkill since there is only a singe request (send credentials in exchange for session cookie), but I expect the flow pattern is used here to allow for MFA logins in the future.</p>
+<p>So the login is as follows:</p>
+<ol type="1">
+<li>Request a login flow</li>
+<li>Kratos returns login flow ID</li>
+<li>Send login to kratos, referencing the flow ID</li>
+<li>Kratos returns session cookie</li>
+<li>Request protected field from GQL api, attaching session cookie</li>
+<li>GQL API asks kratos to verify session cookie</li>
+<li>Kratos returns user ID belonging to session cookie</li>
+<li>GQL API returns protected field</li>
+</ol>
+</section>
+<section id="redirects-account-recovery" class="level2">
+<h2 class="anchored" data-anchor-id="redirects-account-recovery">Redirects / Account recovery</h2>
+<p>Sometimes, Kratos and the user interface need another concept to interact. Let’s say you forgot your password and requested a recovery link via mail. The problem kratos developers needed to solve here is to send some <em>token</em> from the recovery link back to kratos (to verify the email) and at the same time associate it with a session of the UI in a web browser so that the user can reset their password in the UI, and all with minimal knowledge of the specific app architecture.</p>
+<p>They solved this by hosting kratos on the same domain as the app itself and using <em>redirects</em>. For instance our UI is hosted under https://huddle.hsg.fs.tum.de/ui whereas kratos is hosted under https://huddle.hsg.fs.tum.de/.ory/kratos. The messages exchanged are as follows:</p>
+<ol type="1">
+<li>User clicks recovery link in the format https://huddle.hsg.fs.tum.de/.ory/kratos/self-service/recovery?flow=6b817dhf-4717-48we-a756-cd7902b43ce6&amp;token=QiGjssJcvB08H7cUdE3tyXvQr1i4OSaR. Note that this will result in a GET request by the browser that will be handled by kratos totally independent from the UI!</li>
+<li>Kratos verifies the query parameters and responds with a redirect to a preconfigured URL such as https://huddle.hsg.fs.tum.de/ui/profile. A session cookie is set as well so that future requests by the user can be authenticated</li>
+<li>After the redirect, the web application UI takes over. For instance the user can set a new password on the profile site.</li>
+</ol>
+</section>
+<section id="deployment-and-secret-management" class="level1">
+<h1>Deployment and secret management</h1>
+<p>Let’s first go through the deployment of ory kratos itself, which we do in <a href="https://kubernetes.io/">kubernetes</a> with <a href="https://helm.sh/">helm</a> and <a href="https://github.com/roboll/helmfile">helmfile</a>.</p>
+<p>Kratos has a <a href="https://k8s.ory.sh/helm/kratos.html">helm chart</a> that allows to install kratos in a cluster more or less conveniently. The interesting thing is how to configure kratos (set redirect links, email-credentials etc.). We to it by providing values to the helm chart in our helmfile. All this is managed in our <a href="https://gitlab.lrz.de/projecthub/deployment">deployment repo</a>:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode txt code-with-copy"><code class="sourceCode default"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>├── cert.yaml</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>├── database</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>│   ├── migrate.sh</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>     ...</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>├── database.yml</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>├── deployment.yaml</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>├── helmfile.yaml</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>├── kratos.yml</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>└── userSchema.json</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>...</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p>The entrypoint for the kratos deployment is <code>helmfile.yaml</code>:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode yaml code-with-copy"><code class="sourceCode yaml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">repositories</span><span class="kw">:</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="co">...</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="co">  - name: ory</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="co">    url: https://k8s.ory.sh/helm/charts</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="co">releases:</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="co">...</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a><span class="co">  - name: kratos</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a><span class="co">    chart: ory/kratos</span></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a><span class="co">    values:</span></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a><span class="co">      - kratos.yml</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p>Note how the configuration itself is loaded from another file, <code>kratos.yml</code>:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode yaml code-with-copy"><code class="sourceCode yaml"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">kratos</span><span class="kw">:</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">config</span><span class="kw">:</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">courier</span><span class="kw">:</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">smtp</span><span class="kw">:</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="at">        </span><span class="fu">from_address</span><span class="kw">:</span><span class="at"> huddle.bot@zohomail.eu</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="at">        </span><span class="fu">from_name</span><span class="kw">:</span><span class="at"> Huddle</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">identity</span><span class="kw">:</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a><span class="at">        </span><span class="fu">default_schema_url</span><span class="kw">:</span><span class="at"> base64://ewogICAgIiRpZCI6ICJodHRwczovL2dpdGxhYi5scnouZGUvcHJvamVjdGh1Yi9zY2hlbWEtdXNlci1rcmF0b3MuanNvbiIsCiAgICAiJHNjaGVtYSI6ICJodHRwOi8vanNvbi1zY2hlbWEub3JnL2RyYWZ0LTA3L3NjaGVtYSMiLAogICAgInRpdGxlIjogIlBlcnNvbiIsCiAgICAidHlwZSI6ICJvYmplY3QiLAogICAgInByb3BlcnRpZXMiOiB7CiAgICAgICAgInRyYWl0cyI6IHsKICAgICAgICAgICAgInR5cGUiOiAib2JqZWN0IiwKICAgICAgICAgICAgInByb3BlcnRpZXMiOiB7CiAgICAgICAgICAgICAgICAiZW1haWwiOiB7CiAgICAgICAgICAgICAgICAgICAgInR5cGUiOiAic3RyaW5nIiwKICAgICAgICAgICAgICAgICAgICAiZm9ybWF0IjogImVtYWlsIiwKICAgICAgICAgICAgICAgICAgICAib3J5LnNoL2tyYXRvcyI6IHsKICAgICAgICAgICAgICAgICAgICAgICAgImNyZWRlbnRpYWxzIjogewogICAgICAgICAgICAgICAgICAgICAgICAgICAgInBhc3N3b3JkIjogewogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICJpZGVudGlmaWVyIjogdHJ1ZQogICAgICAgICAgICAgICAgICAgICAgICAgICAgfQogICAgICAgICAgICAgICAgICAgICAgICB9LAogICAgICAgICAgICAgICAgICAgICAgICAidmVyaWZpY2F0aW9uIjogewogICAgICAgICAgICAgICAgICAgICAgICAgICAgInZpYSI6ICJlbWFpbCIKICAgICAgICAgICAgICAgICAgICAgICAgfSwKICAgICAgICAgICAgICAgICAgICAgICAgInJlY292ZXJ5IjogewogICAgICAgICAgICAgICAgICAgICAgICAgICAgInZpYSI6ICJlbWFpbCIKICAgICAgICAgICAgICAgICAgICAgICAgfQogICAgICAgICAgICAgICAgICAgIH0KICAgICAgICAgICAgICAgIH0sCiAgICAgICAgICAgICAgICAidXNlcm5hbWUiOiB7CiAgICAgICAgICAgICAgICAgICAgInR5cGUiOiAic3RyaW5nIiwKICAgICAgICAgICAgICAgICAgICAib3J5LnNoL2tyYXRvcyI6IHsKICAgICAgICAgICAgICAgICAgICAgICAgImNyZWRlbnRpYWxzIjogewogICAgICAgICAgICAgICAgICAgICAgICAgICAgInBhc3N3b3JkIjogewogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICJpZGVudGlmaWVyIjogdHJ1ZQogICAgICAgICAgICAgICAgICAgICAgICAgICAgfQogICAgICAgICAgICAgICAgICAgICAgICB9CiAgICAgICAgICAgICAgICAgICAgfQogICAgICAgICAgICAgICAgfQogICAgICAgICAgICB9CiAgICAgICAgfQogICAgfQp9</span></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a><span class="at">        </span><span class="fu">schemas</span><span class="kw">:</span><span class="at"> </span><span class="kw">[]</span></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">selfservice</span><span class="kw">:</span></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">default_browser_return_url</span><span class="kw">:</span><span class="at"> https://huddle.hsg.fs.tum.de/ui</span></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">methods</span><span class="kw">:</span></span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a><span class="at">        </span><span class="fu">link</span><span class="kw">:</span></span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a><span class="at">          </span><span class="fu">enabled</span><span class="kw">:</span><span class="at"> </span><span class="ch">true</span></span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">flows</span><span class="kw">:</span></span>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a><span class="at">        </span><span class="fu">settings</span><span class="kw">:</span></span>
+<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a><span class="at">          </span><span class="fu">ui_url</span><span class="kw">:</span><span class="at"> https://huddle.hsg.fs.tum.de/ui/</span></span>
+<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a><span class="at">        </span><span class="fu">verification</span><span class="kw">:</span></span>
+<span id="cb3-19"><a href="#cb3-19" aria-hidden="true" tabindex="-1"></a><span class="at">          </span><span class="fu">ui_url</span><span class="kw">:</span><span class="at"> https://huddle.hsg.fs.tum.de/ui/verification</span></span>
+<span id="cb3-20"><a href="#cb3-20" aria-hidden="true" tabindex="-1"></a><span class="at">          </span><span class="fu">enabled</span><span class="kw">:</span><span class="at"> </span><span class="ch">true</span></span>
+<span id="cb3-21"><a href="#cb3-21" aria-hidden="true" tabindex="-1"></a><span class="at">        </span><span class="fu">recovery</span><span class="kw">:</span></span>
+<span id="cb3-22"><a href="#cb3-22" aria-hidden="true" tabindex="-1"></a><span class="at">          </span><span class="fu">enabled</span><span class="kw">:</span><span class="at"> </span><span class="ch">true</span></span>
+<span id="cb3-23"><a href="#cb3-23" aria-hidden="true" tabindex="-1"></a><span class="at">          </span><span class="fu">ui_url</span><span class="kw">:</span><span class="at"> https://huddle.hsg.fs.tum.de/ui/profile</span></span>
+<span id="cb3-24"><a href="#cb3-24" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">serve</span><span class="kw">:</span></span>
+<span id="cb3-25"><a href="#cb3-25" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">public</span><span class="kw">:</span></span>
+<span id="cb3-26"><a href="#cb3-26" aria-hidden="true" tabindex="-1"></a><span class="at">        </span><span class="fu">base_url</span><span class="kw">:</span><span class="at"> https://huddle.hsg.fs.tum.de/.ory/kratos</span></span>
+<span id="cb3-27"><a href="#cb3-27" aria-hidden="true" tabindex="-1"></a><span class="at">        </span><span class="fu">cors</span><span class="kw">:</span></span>
+<span id="cb3-28"><a href="#cb3-28" aria-hidden="true" tabindex="-1"></a><span class="at">          </span><span class="fu">enabled</span><span class="kw">:</span><span class="at"> </span><span class="ch">true</span></span>
+<span id="cb3-29"><a href="#cb3-29" aria-hidden="true" tabindex="-1"></a><span class="at">          </span><span class="fu">allowed_origins</span><span class="kw">:</span></span>
+<span id="cb3-30"><a href="#cb3-30" aria-hidden="true" tabindex="-1"></a><span class="at">            </span><span class="kw">-</span><span class="at"> https://huddle.hsg.fs.tum.de</span></span>
+<span id="cb3-31"><a href="#cb3-31" aria-hidden="true" tabindex="-1"></a><span class="at">            </span><span class="kw">-</span><span class="at"> https://huddle.ridilla.eu</span></span>
+<span id="cb3-32"><a href="#cb3-32" aria-hidden="true" tabindex="-1"></a><span class="at">            </span><span class="kw">-</span><span class="at"> http://localhost:3000</span></span>
+<span id="cb3-33"><a href="#cb3-33" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">autoMigrate</span><span class="kw">:</span><span class="at"> </span><span class="ch">true</span></span>
+<span id="cb3-34"><a href="#cb3-34" aria-hidden="true" tabindex="-1"></a><span class="fu">secret</span><span class="kw">:</span></span>
+<span id="cb3-35"><a href="#cb3-35" aria-hidden="true" tabindex="-1"></a><span class="co">  # -- switch to false to prevent creating the secret</span></span>
+<span id="cb3-36"><a href="#cb3-36" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">enabled</span><span class="kw">:</span><span class="at"> </span><span class="ch">false</span></span>
+<span id="cb3-37"><a href="#cb3-37" aria-hidden="true" tabindex="-1"></a><span class="co">  # -- Provide custom name of existing secret, or custom name of secret to be created</span></span>
+<span id="cb3-38"><a href="#cb3-38" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">nameOverride</span><span class="kw">:</span><span class="at"> secret-kratos</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p>This config consists of two parts:</p>
+<ol type="1">
+<li>The <code>kratos.config</code> subfields follow the schema for configuring kratos independent from kubernetes, as described <a href="https://www.ory.sh/docs/kratos/reference/configuration">here</a>. As you can see we set various fields such as the email address to use for account recovery, the url to redirect to after recovery and the <a href="https://www.ory.sh/docs/kratos/concepts/identity-schema">identity schema to use for storing account data</a> in base 64 encoding.</li>
+<li>The <code>secret</code> subfields are used for a kubernetes-specific way to provide credentials since we don’t want to save them in plain text. We state that kratos should use a secret called <code>secret-kratos</code> to get credentials rather than try to take them from the plain text config. This allows us to create the secret in another, encrypted repo (meaning only encrypted versions of the secrets are tracked with git). The <code>secret-kratos</code>-secret has to be in the following format:</li>
+</ol>
+<div class="sourceCode" id="cb4"><pre class="sourceCode yaml code-with-copy"><code class="sourceCode yaml"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="fu">kind</span><span class="kw">:</span><span class="at"> Secret</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="fu">metadata</span><span class="kw">:</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">name</span><span class="kw">:</span><span class="at"> secret-kratos</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="fu">type</span><span class="kw">:</span><span class="at"> Opaque</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="fu">apiVersion</span><span class="kw">:</span><span class="at"> v1</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a><span class="fu">stringData</span><span class="kw">:</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">dsn</span><span class="kw">:</span><span class="at"> postgres://kratos:cmoaincsieadfo@psql-postgresql:5432/kratos</span></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">secretsCipher</span><span class="kw">:</span><span class="at"> nasdlifuhlaiwd</span></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">secretsCookie</span><span class="kw">:</span><span class="at"> lnaslicWERUOZSdicbl</span></span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">secretsDefault</span><span class="kw">:</span><span class="at"> ANSIULccbASKNXKAJ</span></span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">smtpConnectionURI</span><span class="kw">:</span><span class="at"> smtps://huddle.bot@zohomail.eu:qnIAsdHmsuU@smtp.zoho.eu:465</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p>(of course I replaced the credentials by hitting the keyboard as wild :smiley:)</p>
+<p>Now running <code>helmfile sync</code> will deploy kratos to our cluster!</p>
+<p>Finally we need to publicly expose kratos using an ingress controller in kubernetes:</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode yaml code-with-copy"><code class="sourceCode yaml"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="fu">apiVersion</span><span class="kw">:</span><span class="at"> networking.k8s.io/v1</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="fu">kind</span><span class="kw">:</span><span class="at"> Ingress</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="fu">metadata</span><span class="kw">:</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">name</span><span class="kw">:</span><span class="at"> kratos-ingress</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">annotations</span><span class="kw">:</span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">kubernetes.io/ingress.class</span><span class="kw">:</span><span class="at"> </span><span class="st">"nginx"</span><span class="at">   </span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">nginx.ingress.kubernetes.io/rewrite-target</span><span class="kw">:</span><span class="at"> /$2</span></span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a><span class="fu">spec</span><span class="kw">:</span></span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">tls</span><span class="kw">:</span></span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> </span><span class="fu">hosts</span><span class="kw">:</span></span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="kw">-</span><span class="at"> huddle.ridilla.eu</span></span>
+<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">secretName</span><span class="kw">:</span><span class="at"> huddle-ridilla-eu-prod-tls</span></span>
+<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> </span><span class="fu">hosts</span><span class="kw">:</span></span>
+<span id="cb5-14"><a href="#cb5-14" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="kw">-</span><span class="at"> huddle.hsg.fs.tum.de</span></span>
+<span id="cb5-15"><a href="#cb5-15" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">secretName</span><span class="kw">:</span><span class="at"> huddle-hsg-fs-tum-de-prod-tls</span></span>
+<span id="cb5-16"><a href="#cb5-16" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">rules</span><span class="kw">:</span></span>
+<span id="cb5-17"><a href="#cb5-17" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> </span><span class="fu">host</span><span class="kw">:</span><span class="at"> huddle.hsg.fs.tum.de</span></span>
+<span id="cb5-18"><a href="#cb5-18" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">http</span><span class="kw">:</span></span>
+<span id="cb5-19"><a href="#cb5-19" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">paths</span><span class="kw">:</span></span>
+<span id="cb5-20"><a href="#cb5-20" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="kw">-</span><span class="at"> </span><span class="fu">path</span><span class="kw">:</span><span class="at"> /.ory/kratos(/|$)(.*)</span></span>
+<span id="cb5-21"><a href="#cb5-21" aria-hidden="true" tabindex="-1"></a><span class="at">        </span><span class="fu">pathType</span><span class="kw">:</span><span class="at"> Prefix</span></span>
+<span id="cb5-22"><a href="#cb5-22" aria-hidden="true" tabindex="-1"></a><span class="at">        </span><span class="fu">backend</span><span class="kw">:</span></span>
+<span id="cb5-23"><a href="#cb5-23" aria-hidden="true" tabindex="-1"></a><span class="at">          </span><span class="fu">service</span><span class="kw">:</span></span>
+<span id="cb5-24"><a href="#cb5-24" aria-hidden="true" tabindex="-1"></a><span class="at">            </span><span class="fu">name</span><span class="kw">:</span><span class="at"> kratos-public</span></span>
+<span id="cb5-25"><a href="#cb5-25" aria-hidden="true" tabindex="-1"></a><span class="at">            </span><span class="fu">port</span><span class="kw">:</span></span>
+<span id="cb5-26"><a href="#cb5-26" aria-hidden="true" tabindex="-1"></a><span class="at">              </span><span class="fu">number</span><span class="kw">:</span><span class="at"> </span><span class="dv">80</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p>However two things feel a bit hacky about the deployment:</p>
+<ol type="1">
+<li>Even though we correctly set the base URL in the kratos config, we need to do <a href="https://kubernetes.github.io/ingress-nginx/user-guide/ingress-path-matching/">regex magic to rewrite the path as if kratos was hosted under the root path</a>.</li>
+<li>I was unable to find a way to put the kratos config in its own file (which would for instance enable intellisense in VSCode) and include that file as a subfield of the <code>kratos.config</code> field of the helm config</li>
+<li>Running <code>helmfile sync</code> after altering some kratos preferences does NOT deploy these changes to the cluster. You need to delete the kratos deployment and then run the sync comment.</li>
+</ol>
+<p>Do you have any tips on how to solve this?</p>
+</section>
+<section id="the-login-ui" class="level1">
+<h1>The login UI</h1>
+<p>Now let’s jump right into the code! We handle login requests with a popup component that looks like this: <img src="https://dev-to-uploads.s3.amazonaws.com/uploads/articles/fqp8v5gn67b44j7skowx.png" class="img-fluid" alt="Authentication popup"> The component receives an observable of so-called “login request” as a property. By default it’s hidden. Whenever a login requests drops in (since a user clicked an item that needs authorization), the component pops up and asks the user to fill in their credentials, register or reset their password. When the credentials are entered, the corresponding flow is started using the <a href="https://www.ory.sh/docs/kratos/sdk">kratos js sdk</a>.</p>
+<pre class="tsx"><code>import React, { useEffect, useState } from 'react';
+import type { Identity, UiContainer, V0alpha2Api } from '@ory/kratos-client'
+let _api: V0alpha2Api | undefined
+export const getAPI = async () =&gt; {
+    // allow for code splitting since the kratos sdk is large
+    if (!_api) {
+        const { V0alpha2Api, Configuration } = await import("@ory/kratos-client")
+        const kratosConfig = new Configuration({
+            basePath: clientConfig.kratosUrl,
+            baseOptions: {
+                withCredentials: true
+            }
+        });
+        _api = new V0alpha2Api(kratosConfig);
+    }
+    return _api
+}
+import './AuthenticationManagerPopup.css'
+import { AuthenticationRequest } from './authenticationObserbale';
+import { Observable, useApolloClient } from '@apollo/client';
+import Button from '../shared/Button';
+import Input from '../shared/Input';
+import { clientConfig } from "../config"
+import { Link } from 'react-router-dom';
+import { useGetMeWithoutLoginPromptQuery } from '../schemas';
+export const AuthenticationManagerPopup: React.FC&lt;{ a: Observable&lt;AuthenticationRequest&gt; }&gt; = (props) =&gt; {
+    const meData = useGetMeWithoutLoginPromptQuery() // This should actually never be needed when the popup is shown
+    const client = useApolloClient()
+    const [authRequests, setAuthRequests] = useState&lt;AuthenticationRequest[]&gt;([])
+    const [email, setEmail] = useState("")
+    const [password, setPassword] = useState("")
+    useEffect(() =&gt; {
+        // listen for authentication requests on component creation...
+        const subscription = props.a.subscribe(req =&gt; {
+            setAuthRequests([...authRequests, req])
+        })
+        // ... and clean up when the component is unmounted
+        return () =&gt; {
+            subscription.unsubscribe()
+        }
+    }, [])
+    if (authRequests.length === 0) {
+        return null
+    }
+    return (
+        &lt;div id="authentication-manager-popup"&gt;
+            &lt;div&gt;
+                &lt;h1&gt;Authentication Panel&lt;/h1&gt;
+                {meData.data?.meIfLoggedIn &amp;&amp; &lt;p&gt;Hello {meData.data.meIfLoggedIn?.username}, old friend!&lt;/p&gt;}
+                &lt;br /&gt;
+                &lt;Input onChange={setEmail} description='email' autoComplete='email' /&gt;
+                &lt;br /&gt;
+                &lt;Input onChange={setPassword} description='Password' autoComplete='current-password' type='password' /&gt;
+                &lt;br /&gt;
+                &lt;Button filled disabledMessage={email.length === 0 || password.length === 0 ? "Please enter your email address and desired password above to register" : undefined}
+                    onClick={async () =&gt; {
+                        try {
+                            console.log('registering user');
+                            const api = await getAPI()
+                            const resp = await api.initializeSelfServiceRegistrationFlowForBrowsers()
+                            console.log(resp.data);
+                            if (!resp) return
+                            const registrationFlowId = resp.data.id;
+                            const csrf_token = (resp.data.ui.nodes[0].attributes as { value: string }).value;
+
+                            const registrationResponse = await api.submitSelfServiceRegistrationFlow(registrationFlowId, {
+                                method: "password",
+                                password: password,
+                                traits: {
+                                    email: email
+                                },
+                                csrf_token: csrf_token
+                            })
+                            console.log(registrationResponse.data);
+                            resp.data.ui
+                            api.initializeSelfServiceVerificationFlowForBrowsers().then(resp =&gt; {
+                                console.log(resp.data);
+                                const csrf_token = (resp.data.ui.nodes[0].attributes as { value: string }).value;
+                                api.submitSelfServiceVerificationFlow(resp.data.id, undefined, {
+                                    method: "link",
+                                    email: email,
+                                    csrf_token
+                                }).then(resp =&gt; {
+                                    console.log(resp.data);
+                                    client.refetchQueries({
+                                        include: "active",
+                                    });
+                                })
+                            })
+                        } catch (e) {
+                            alertUnknownError(e)
+                        }
+                    }}&gt;register&lt;/Button&gt;
+                &lt;p&gt;or&lt;/p&gt;
+                &lt;br /&gt;
+                &lt;Button filled disabledMessage={email.length === 0 || password.length === 0 ? "Please enter your email address and password above to log in" : undefined}
+                    onClick={async () =&gt; {
+                        try {
+                            console.log('login');
+                            const api = await getAPI()
+                            const resp = await api.initializeSelfServiceLoginFlowForBrowsers()
+                            console.log(resp.data);
+                            if (!resp) return
+                            const csrf_token = (resp.data.ui.nodes[0].attributes as { value: string }).value;
+
+                            const loginResponse = await api.submitSelfServiceLoginFlow(resp.data.id, undefined, {
+                                method: "password",
+                                password: password,
+                                password_identifier: email,
+                                csrf_token: csrf_token
+                            })
+                            console.log(loginResponse.data);
+                            authRequests.forEach(r =&gt; r.onFinished())
+                            setAuthRequests([])
+                            client.refetchQueries({ include: "all" })
+                        } catch (error) {
+                            alertUnknownError(error)
+                        }
+                    }}&gt;login&lt;/Button&gt;
+                &lt;p&gt;By registering, you consent to the &lt;Link target="_blank" to="/about"&gt;data we collect and our terms of use&lt;/Link&gt;. &lt;/p&gt;
+                &lt;Button disabledMessage={email.length === 0 ? "Please enter your email address above to recover your account" : undefined}
+                    onClick={async () =&gt; {
+                        try {
+                            console.log('trying to recover account');
+                            const api = await getAPI()
+                            const resp = await api.initializeSelfServiceRecoveryFlowForBrowsers()
+                            console.log(resp.data);
+                            if (!resp) return
+                            const loginFlowId = resp.data.id;
+                            const csrf_token = (resp.data.ui.nodes[0].attributes as { value: string }).value;
+
+                            const recoveryResponse = await api.submitSelfServiceRecoveryFlow(resp.data.id, undefined, {
+                                method: "link",
+                                email,
+                                csrf_token
+                            })
+                            console.log(recoveryResponse.data);
+                            authRequests.forEach(r =&gt; r.onFinished())
+                            setAuthRequests([])
+                        } catch (error) {
+                            alertUnknownError(error)
+                        }
+                    }}&gt;reset password&lt;/Button&gt;
+                &lt;br /&gt;
+                &lt;Button onClick={() =&gt; {
+                    authRequests.forEach(r =&gt; r.onFailed("User closed window"))
+                    setAuthRequests([])
+                }}&gt;close&lt;/Button&gt;
+            &lt;/div&gt;
+        &lt;/div&gt;
+    )
+}
+
+export const logout = async () =&gt; {
+    console.log('logout');
+    const api = await getAPI()
+    const resp = await api.createSelfServiceLogoutFlowUrlForBrowsers()
+    console.log(resp.data);
+    if (!resp) return
+    const logoutResponse = await api.submitSelfServiceLogoutFlow(resp.data.logout_token)
+    console.log(logoutResponse.data);
+}
+export const LogoutButton: React.FC = props =&gt; {
+    return (
+        &lt;Button onClick={logout}&gt;Logout&lt;/Button&gt;
+    )
+}
+...</code></pre>
+<p>Is there a nicer way to handle the CSRF token? This feels a bit hacky…</p>
+<p>Right now, the flows can be finished without any further human interventions since they consist only of one step, but this may change with 2FA.</p>
+<p>The missing part that I find really cool is how the popup is triggered. We do this by a clever configuration of the Apollo client with <a href="https://www.apollographql.com/docs/react/api/link/introduction/">Links</a>:</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode ts code-with-copy"><code class="sourceCode typescript"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> { HttpLink<span class="op">,</span> ApolloClient<span class="op">,</span> InMemoryCache<span class="op">,</span> ApolloLink<span class="op">,</span> Observable } <span class="im">from</span> <span class="st">"@apollo/client"</span><span class="op">;</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> { offsetLimitPagination } <span class="im">from</span> <span class="st">"@apollo/client/utilities"</span><span class="op">;</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> PushStream <span class="im">from</span> <span class="st">"zen-push"</span></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> { AuthenticationRequest } <span class="im">from</span> <span class="st">"./authentication/authenticationObserbale"</span><span class="op">;</span></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> {clientConfig}  <span class="im">from</span> <span class="st">"./config"</span><span class="op">;</span></span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> { StrictTypedTypePolicies } <span class="im">from</span> <span class="st">"./schemas"</span><span class="op">;</span></span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> endpointLink <span class="op">=</span> <span class="kw">new</span> <span class="fu">HttpLink</span>({</span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>    uri<span class="op">:</span> clientConfig<span class="op">.</span><span class="at">gqlUrl</span><span class="op">,</span></span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a>    credentials<span class="op">:</span> <span class="st">"include"</span></span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a>})<span class="op">;</span></span>
+<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a><span class="co">// Subscribe to this to display the authentication popup when needing authentication</span></span>
+<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a><span class="im">export</span> <span class="kw">const</span> authenticationStream <span class="op">=</span> <span class="kw">new</span> <span class="fu">PushStream</span><span class="op">&lt;</span>AuthenticationRequest<span class="op">&gt;</span>()<span class="op">;</span></span>
+<span id="cb7-14"><a href="#cb7-14" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> LoginLink <span class="op">=</span> <span class="kw">new</span> <span class="fu">ApolloLink</span>((operation<span class="op">,</span> forward) <span class="kw">=&gt;</span> {</span>
+<span id="cb7-15"><a href="#cb7-15" aria-hidden="true" tabindex="-1"></a>    <span class="kw">const</span> observable <span class="op">=</span> endpointLink<span class="op">.</span><span class="fu">request</span>(operation)<span class="op">;</span></span>
+<span id="cb7-16"><a href="#cb7-16" aria-hidden="true" tabindex="-1"></a>    <span class="kw">let</span> waitingForLogin <span class="op">=</span> <span class="kw">false</span></span>
+<span id="cb7-17"><a href="#cb7-17" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="kw">new</span> <span class="fu">Observable</span>((observer) <span class="kw">=&gt;</span> {</span>
+<span id="cb7-18"><a href="#cb7-18" aria-hidden="true" tabindex="-1"></a>        <span class="co">// subscribe to http link and handle authentication errors seperately</span></span>
+<span id="cb7-19"><a href="#cb7-19" aria-hidden="true" tabindex="-1"></a>        <span class="kw">const</span> subs <span class="op">=</span> observable<span class="op">!.</span><span class="fu">subscribe</span>({</span>
+<span id="cb7-20"><a href="#cb7-20" aria-hidden="true" tabindex="-1"></a>            next<span class="op">:</span> (data) <span class="kw">=&gt;</span> {</span>
+<span id="cb7-21"><a href="#cb7-21" aria-hidden="true" tabindex="-1"></a>                <span class="cf">if</span> (data<span class="op">.</span><span class="at">errors</span><span class="op">?.</span>[<span class="dv">0</span>]<span class="op">?.</span><span class="at">message</span><span class="op">.</span><span class="fu">includes</span>(<span class="st">"authenticate"</span>)) {</span>
+<span id="cb7-22"><a href="#cb7-22" aria-hidden="true" tabindex="-1"></a>                    waitingForLogin <span class="op">=</span> <span class="kw">true</span></span>
+<span id="cb7-23"><a href="#cb7-23" aria-hidden="true" tabindex="-1"></a>                    <span class="co">// Ask for login</span></span>
+<span id="cb7-24"><a href="#cb7-24" aria-hidden="true" tabindex="-1"></a>                    authenticationStream<span class="op">.</span><span class="fu">next</span>({</span>
+<span id="cb7-25"><a href="#cb7-25" aria-hidden="true" tabindex="-1"></a>                        onFailed<span class="op">:</span> () <span class="kw">=&gt;</span> {</span>
+<span id="cb7-26"><a href="#cb7-26" aria-hidden="true" tabindex="-1"></a>                            observer<span class="op">.</span><span class="fu">next</span>(data)</span>
+<span id="cb7-27"><a href="#cb7-27" aria-hidden="true" tabindex="-1"></a>                            waitingForLogin <span class="op">=</span> <span class="kw">false</span></span>
+<span id="cb7-28"><a href="#cb7-28" aria-hidden="true" tabindex="-1"></a>                        }<span class="op">,</span></span>
+<span id="cb7-29"><a href="#cb7-29" aria-hidden="true" tabindex="-1"></a>                        onFinished<span class="op">:</span> () <span class="kw">=&gt;</span> {</span>
+<span id="cb7-30"><a href="#cb7-30" aria-hidden="true" tabindex="-1"></a>                            <span class="co">// retry fetching data after authentication</span></span>
+<span id="cb7-31"><a href="#cb7-31" aria-hidden="true" tabindex="-1"></a>                            subs<span class="op">.</span><span class="fu">unsubscribe</span>()</span>
+<span id="cb7-32"><a href="#cb7-32" aria-hidden="true" tabindex="-1"></a>                            endpointLink<span class="op">.</span><span class="fu">request</span>(operation)<span class="op">?.</span><span class="fu">subscribe</span>({</span>
+<span id="cb7-33"><a href="#cb7-33" aria-hidden="true" tabindex="-1"></a>                                next<span class="op">:</span> data <span class="kw">=&gt;</span> observer<span class="op">.</span><span class="fu">next</span>(data)<span class="op">,</span></span>
+<span id="cb7-34"><a href="#cb7-34" aria-hidden="true" tabindex="-1"></a>                                complete<span class="op">:</span> () <span class="kw">=&gt;</span> observer<span class="op">.</span><span class="fu">complete</span>()<span class="op">,</span></span>
+<span id="cb7-35"><a href="#cb7-35" aria-hidden="true" tabindex="-1"></a>                                error<span class="op">:</span> (err) <span class="kw">=&gt;</span> observer<span class="op">.</span><span class="fu">error</span>(err)</span>
+<span id="cb7-36"><a href="#cb7-36" aria-hidden="true" tabindex="-1"></a>                            })</span>
+<span id="cb7-37"><a href="#cb7-37" aria-hidden="true" tabindex="-1"></a>                        }</span>
+<span id="cb7-38"><a href="#cb7-38" aria-hidden="true" tabindex="-1"></a>                    })</span>
+<span id="cb7-39"><a href="#cb7-39" aria-hidden="true" tabindex="-1"></a>                } <span class="cf">else</span> {</span>
+<span id="cb7-40"><a href="#cb7-40" aria-hidden="true" tabindex="-1"></a>                    <span class="co">// forward data</span></span>
+<span id="cb7-41"><a href="#cb7-41" aria-hidden="true" tabindex="-1"></a>                    observer<span class="op">.</span><span class="fu">next</span>(data)<span class="op">;</span></span>
+<span id="cb7-42"><a href="#cb7-42" aria-hidden="true" tabindex="-1"></a>                }</span>
+<span id="cb7-43"><a href="#cb7-43" aria-hidden="true" tabindex="-1"></a>            }<span class="op">,</span></span>
+<span id="cb7-44"><a href="#cb7-44" aria-hidden="true" tabindex="-1"></a>            error<span class="op">:</span> (error) <span class="kw">=&gt;</span> {</span>
+<span id="cb7-45"><a href="#cb7-45" aria-hidden="true" tabindex="-1"></a>                observer<span class="op">.</span><span class="fu">error</span>(error)<span class="op">;</span></span>
+<span id="cb7-46"><a href="#cb7-46" aria-hidden="true" tabindex="-1"></a>            }</span>
+<span id="cb7-47"><a href="#cb7-47" aria-hidden="true" tabindex="-1"></a>            <span class="op">,</span></span>
+<span id="cb7-48"><a href="#cb7-48" aria-hidden="true" tabindex="-1"></a>            complete<span class="op">:</span> () <span class="kw">=&gt;</span> {</span>
+<span id="cb7-49"><a href="#cb7-49" aria-hidden="true" tabindex="-1"></a>                <span class="cf">if</span> (<span class="op">!</span>waitingForLogin) {</span>
+<span id="cb7-50"><a href="#cb7-50" aria-hidden="true" tabindex="-1"></a>                    observer<span class="op">.</span><span class="fu">complete</span>()<span class="op">;</span></span>
+<span id="cb7-51"><a href="#cb7-51" aria-hidden="true" tabindex="-1"></a>                }</span>
+<span id="cb7-52"><a href="#cb7-52" aria-hidden="true" tabindex="-1"></a>            }</span>
+<span id="cb7-53"><a href="#cb7-53" aria-hidden="true" tabindex="-1"></a>        })<span class="op">;</span></span>
+<span id="cb7-54"><a href="#cb7-54" aria-hidden="true" tabindex="-1"></a>    })<span class="op">;</span></span>
+<span id="cb7-55"><a href="#cb7-55" aria-hidden="true" tabindex="-1"></a>})<span class="op">;</span></span>
+<span id="cb7-56"><a href="#cb7-56" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> typePolicies<span class="op">:</span> StrictTypedTypePolicies<span class="op">=</span>{</span>
+<span id="cb7-57"><a href="#cb7-57" aria-hidden="true" tabindex="-1"></a>    Project<span class="op">:</span>{</span>
+<span id="cb7-58"><a href="#cb7-58" aria-hidden="true" tabindex="-1"></a>        keyFields<span class="op">:</span>[<span class="st">"id"</span>]<span class="op">,</span></span>
+<span id="cb7-59"><a href="#cb7-59" aria-hidden="true" tabindex="-1"></a>        <span class="fu">merge</span>(existing<span class="op">,</span> incoming) {</span>
+<span id="cb7-60"><a href="#cb7-60" aria-hidden="true" tabindex="-1"></a>            <span class="cf">return</span> { <span class="op">...</span>existing<span class="op">,</span> <span class="op">...</span>incoming }<span class="op">;</span></span>
+<span id="cb7-61"><a href="#cb7-61" aria-hidden="true" tabindex="-1"></a>        }</span>
+<span id="cb7-62"><a href="#cb7-62" aria-hidden="true" tabindex="-1"></a>    }<span class="op">,</span></span>
+<span id="cb7-63"><a href="#cb7-63" aria-hidden="true" tabindex="-1"></a>    Query<span class="op">:</span>{</span>
+<span id="cb7-64"><a href="#cb7-64" aria-hidden="true" tabindex="-1"></a>        fields<span class="op">:</span>{</span>
+<span id="cb7-65"><a href="#cb7-65" aria-hidden="true" tabindex="-1"></a>            searchProjects<span class="op">:</span><span class="fu">offsetLimitPagination</span>([<span class="st">"options"</span><span class="op">,</span><span class="st">"searchString"</span>])</span>
+<span id="cb7-66"><a href="#cb7-66" aria-hidden="true" tabindex="-1"></a>        }</span>
+<span id="cb7-67"><a href="#cb7-67" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb7-68"><a href="#cb7-68" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb7-69"><a href="#cb7-69" aria-hidden="true" tabindex="-1"></a><span class="im">export</span> <span class="kw">const</span> client <span class="op">=</span> <span class="kw">new</span> <span class="fu">ApolloClient</span>({</span>
+<span id="cb7-70"><a href="#cb7-70" aria-hidden="true" tabindex="-1"></a>    <span class="co">// uri: 'https://huddle.ridilla.eu/api/query',</span></span>
+<span id="cb7-71"><a href="#cb7-71" aria-hidden="true" tabindex="-1"></a>    cache<span class="op">:</span> <span class="kw">new</span> <span class="fu">InMemoryCache</span>({typePolicies})<span class="op">,</span></span>
+<span id="cb7-72"><a href="#cb7-72" aria-hidden="true" tabindex="-1"></a>    link<span class="op">:</span> LoginLink</span>
+<span id="cb7-73"><a href="#cb7-73" aria-hidden="true" tabindex="-1"></a>})<span class="op">;</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p>We hook into the http requests sent to our API and whenever an error contains the word “authentication”, we ask our user to log in by pushing in the <code>authenticationStream</code>, which is passed to our instance of the <code>AuthenticationPopup</code> component.</p>
+<p>The nice thing is that in the rest of the UI, we have no other point, where we need to care about authentication! Just make your GraphQL request and authentication will be handled by the client!</p>
+</section>
+<section id="verifying-users-in-the-api-backend" class="level1">
+<h1>Verifying users in the API backend</h1>
+<p>Now imagine a user wants to access a protected field of our api (see <a href="https://dev.to/peteole/how-we-built-a-student-project-platform-using-graphql-react-golang-ory-kratos-and-kubernetes-part-1-19jg">here</a> for a post about our API architecture) and the backend needs to decide somehow who the requester is in order to know if they have the permission to access the field. On a high level, the backend must extract the session cookie from the request and ask kratos who that cookie belongs to. This is done by injecting some code at the root of our server with the <a href="https://www.ory.sh/docs/kratos/sdk">kratos go sdk</a>. The go specific part of the sdk is not documented at all as far as I know so we had to fiddle around with it until it worked.</p>
+<p>For every request,we attach the user ID of the requester to the context. But to find out the user ID, we extract the session cookie from the request and check it against kratos with the <code>ToSession</code> function. Note that we <a href="https://github.com/ory/kratos/discussions/2053#discussioncomment-1798113">only set the cookie for that request and not some header</a>!</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode go code-with-copy"><code class="sourceCode go"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="op">(</span></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">"context"</span></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">"fmt"</span></span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>    <span class="st">"log"</span></span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>    <span class="st">"net/http"</span></span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>    <span class="st">"os"</span></span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a>    <span class="st">"github.com/99designs/gqlgen/graphql"</span></span>
+<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a>    <span class="st">"github.com/99designs/gqlgen/graphql/handler"</span></span>
+<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a>    <span class="st">"github.com/99designs/gqlgen/graphql/playground"</span></span>
+<span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a>    kc <span class="st">"github.com/ory/kratos-client-go"</span></span>
+<span id="cb8-14"><a href="#cb8-14" aria-hidden="true" tabindex="-1"></a>    <span class="st">"github.com/rs/cors"</span></span>
+<span id="cb8-15"><a href="#cb8-15" aria-hidden="true" tabindex="-1"></a>    <span class="st">"gitlab.lrz.de/projecthub/gql-api/auth"</span></span>
+<span id="cb8-16"><a href="#cb8-16" aria-hidden="true" tabindex="-1"></a>    <span class="st">"gitlab.lrz.de/projecthub/gql-api/graph/generated"</span></span>
+<span id="cb8-17"><a href="#cb8-17" aria-hidden="true" tabindex="-1"></a>    <span class="st">"gitlab.lrz.de/projecthub/gql-api/graph/resolvers"</span></span>
+<span id="cb8-18"><a href="#cb8-18" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb8-19"><a href="#cb8-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-20"><a href="#cb8-20" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> port <span class="op">=</span> <span class="st">"8080"</span></span>
+<span id="cb8-21"><a href="#cb8-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-22"><a href="#cb8-22" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb8-23"><a href="#cb8-23" aria-hidden="true" tabindex="-1"></a>    kratosConfig <span class="op">:=</span> kc<span class="op">.</span>NewConfiguration<span class="op">()</span></span>
+<span id="cb8-24"><a href="#cb8-24" aria-hidden="true" tabindex="-1"></a>    kratosConfig<span class="op">.</span>Host <span class="op">=</span> <span class="st">"kratos-public"</span></span>
+<span id="cb8-25"><a href="#cb8-25" aria-hidden="true" tabindex="-1"></a>    kratosConfig<span class="op">.</span>Scheme <span class="op">=</span> <span class="st">"http"</span></span>
+<span id="cb8-26"><a href="#cb8-26" aria-hidden="true" tabindex="-1"></a>    api <span class="op">:=</span> kc<span class="op">.</span>NewAPIClient<span class="op">(</span>kratosConfig<span class="op">)</span></span>
+<span id="cb8-27"><a href="#cb8-27" aria-hidden="true" tabindex="-1"></a>    resolver<span class="op">,</span> _ <span class="op">:=</span> resolvers<span class="op">.</span>NewResolver<span class="op">(</span>os<span class="op">.</span>ExpandEnv<span class="op">(</span>os<span class="op">.</span>Getenv<span class="op">(</span><span class="st">"DB_CONNECTION_STRING"</span><span class="op">)))</span></span>
+<span id="cb8-28"><a href="#cb8-28" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-29"><a href="#cb8-29" aria-hidden="true" tabindex="-1"></a>    config <span class="op">:=</span> generated<span class="op">.</span>Config<span class="op">{</span>Resolvers<span class="op">:</span> resolver<span class="op">}</span></span>
+<span id="cb8-30"><a href="#cb8-30" aria-hidden="true" tabindex="-1"></a>    config<span class="op">.</span>Directives<span class="op">.</span>IsLoggedIn <span class="op">=</span> <span class="kw">func</span><span class="op">(</span>ctx context<span class="op">.</span>Context<span class="op">,</span> obj <span class="kw">interface</span><span class="op">{},</span> next graphql<span class="op">.</span>Resolver<span class="op">)</span> <span class="op">(</span>res <span class="kw">interface</span><span class="op">{},</span> err <span class="dt">error</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb8-31"><a href="#cb8-31" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> _<span class="op">,</span> loginErr <span class="op">:=</span> auth<span class="op">.</span>IdentityFromContext<span class="op">(</span>ctx<span class="op">);</span> loginErr <span class="op">==</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb8-32"><a href="#cb8-32" aria-hidden="true" tabindex="-1"></a>            <span class="cf">return</span> next<span class="op">(</span>ctx<span class="op">)</span></span>
+<span id="cb8-33"><a href="#cb8-33" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span> <span class="cf">else</span> <span class="op">{</span></span>
+<span id="cb8-34"><a href="#cb8-34" aria-hidden="true" tabindex="-1"></a>            <span class="cf">return</span> <span class="ot">nil</span><span class="op">,</span> fmt<span class="op">.</span>Errorf<span class="op">(</span><span class="st">"authenticate please"</span><span class="op">)</span></span>
+<span id="cb8-35"><a href="#cb8-35" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span></span>
+<span id="cb8-36"><a href="#cb8-36" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb8-37"><a href="#cb8-37" aria-hidden="true" tabindex="-1"></a>    srv <span class="op">:=</span> handler<span class="op">.</span>NewDefaultServer<span class="op">(</span>generated<span class="op">.</span>NewExecutableSchema<span class="op">(</span>config<span class="op">))</span></span>
+<span id="cb8-38"><a href="#cb8-38" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-39"><a href="#cb8-39" aria-hidden="true" tabindex="-1"></a>    http<span class="op">.</span>Handle<span class="op">(</span><span class="st">"/api"</span><span class="op">,</span> playground<span class="op">.</span>Handler<span class="op">(</span><span class="st">"GraphQL playground"</span><span class="op">,</span> <span class="st">"/api/query"</span><span class="op">))</span></span>
+<span id="cb8-40"><a href="#cb8-40" aria-hidden="true" tabindex="-1"></a>    corsHandler <span class="op">:=</span> cors<span class="op">.</span>New<span class="op">(</span>cors<span class="op">.</span>Options<span class="op">{</span>AllowedOrigins<span class="op">:</span> <span class="op">[]</span><span class="dt">string</span><span class="op">{</span><span class="st">"http://localhost:3000"</span><span class="op">,</span><span class="st">"https://huddle-groups.readme.io"</span><span class="op">},</span> AllowCredentials<span class="op">:</span> <span class="ot">true</span><span class="op">,</span> OptionsPassthrough<span class="op">:</span> <span class="ot">true</span><span class="op">,</span> AllowedHeaders<span class="op">:</span> <span class="op">[]</span><span class="dt">string</span><span class="op">{</span><span class="st">"*"</span><span class="op">}}).</span>Handler<span class="op">(</span>srv<span class="op">)</span></span>
+<span id="cb8-41"><a href="#cb8-41" aria-hidden="true" tabindex="-1"></a>    http<span class="op">.</span>HandleFunc<span class="op">(</span><span class="st">"/api/query"</span><span class="op">,</span> <span class="kw">func</span><span class="op">(</span>rw http<span class="op">.</span>ResponseWriter<span class="op">,</span> r <span class="op">*</span>http<span class="op">.</span>Request<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb8-42"><a href="#cb8-42" aria-hidden="true" tabindex="-1"></a>        cookie<span class="op">,</span> err <span class="op">:=</span> r<span class="op">.</span>Cookie<span class="op">(</span><span class="st">"ory_kratos_session"</span><span class="op">)</span></span>
+<span id="cb8-43"><a href="#cb8-43" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb8-44"><a href="#cb8-44" aria-hidden="true" tabindex="-1"></a>            corsHandler<span class="op">.</span>ServeHTTP<span class="op">(</span>rw<span class="op">,</span> r<span class="op">)</span></span>
+<span id="cb8-45"><a href="#cb8-45" aria-hidden="true" tabindex="-1"></a>            <span class="cf">return</span></span>
+<span id="cb8-46"><a href="#cb8-46" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span></span>
+<span id="cb8-47"><a href="#cb8-47" aria-hidden="true" tabindex="-1"></a>        toSessionReq <span class="op">:=</span> api<span class="op">.</span>V0alpha2Api<span class="op">.</span>ToSession<span class="op">(</span>context<span class="op">.</span>Background<span class="op">()).</span>Cookie<span class="op">(</span>cookie<span class="op">.</span>String<span class="op">())</span></span>
+<span id="cb8-48"><a href="#cb8-48" aria-hidden="true" tabindex="-1"></a>        session<span class="op">,</span> _<span class="op">,</span> err <span class="op">:=</span> toSessionReq<span class="op">.</span>Execute<span class="op">()</span></span>
+<span id="cb8-49"><a href="#cb8-49" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb8-50"><a href="#cb8-50" aria-hidden="true" tabindex="-1"></a>            corsHandler<span class="op">.</span>ServeHTTP<span class="op">(</span>rw<span class="op">,</span> r<span class="op">)</span></span>
+<span id="cb8-51"><a href="#cb8-51" aria-hidden="true" tabindex="-1"></a>            <span class="cf">return</span></span>
+<span id="cb8-52"><a href="#cb8-52" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span></span>
+<span id="cb8-53"><a href="#cb8-53" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-54"><a href="#cb8-54" aria-hidden="true" tabindex="-1"></a>        newContext <span class="op">:=</span> auth<span class="op">.</span>NewIdentityContext<span class="op">(</span>r<span class="op">.</span>Context<span class="op">(),</span> <span class="op">&amp;</span>session<span class="op">.</span>Identity<span class="op">)</span></span>
+<span id="cb8-55"><a href="#cb8-55" aria-hidden="true" tabindex="-1"></a>        newRequest <span class="op">:=</span> r<span class="op">.</span>WithContext<span class="op">(</span>newContext<span class="op">)</span></span>
+<span id="cb8-56"><a href="#cb8-56" aria-hidden="true" tabindex="-1"></a>        corsHandler<span class="op">.</span>ServeHTTP<span class="op">(</span>rw<span class="op">,</span> newRequest<span class="op">)</span></span>
+<span id="cb8-57"><a href="#cb8-57" aria-hidden="true" tabindex="-1"></a>    <span class="op">})</span></span>
+<span id="cb8-58"><a href="#cb8-58" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-59"><a href="#cb8-59" aria-hidden="true" tabindex="-1"></a>    log<span class="op">.</span>Printf<span class="op">(</span><span class="st">"connect to http://localhost:%s/ for GraphQL playground"</span><span class="op">,</span> port<span class="op">)</span></span>
+<span id="cb8-60"><a href="#cb8-60" aria-hidden="true" tabindex="-1"></a>    log<span class="op">.</span>Fatal<span class="op">(</span>http<span class="op">.</span>ListenAndServe<span class="op">(</span><span class="st">":"</span><span class="op">+</span>port<span class="op">,</span> <span class="ot">nil</span><span class="op">))</span></span>
+<span id="cb8-61"><a href="#cb8-61" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p>We create a GraphQL directive to annotate that a user must be logged in to access a field here, too. Like this we can annotate a field with <code>@isLoggedIn</code> in our schema and if the user is not, an error “authenticate please” will be returned, asking the user to log in in the UI as described above.</p>
+<p>We wrapped the code to write or read the identity to/from the context in the <code>auth</code> package:</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode go code-with-copy"><code class="sourceCode go"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> auth</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="op">(</span></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">"context"</span></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">"fmt"</span></span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>    kc <span class="st">"github.com/ory/kratos-client-go"</span></span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Identity <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a>    kc<span class="op">.</span>Identity</span>
+<span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a>    traits <span class="kw">map</span><span class="op">[</span><span class="dt">string</span><span class="op">]</span><span class="kw">interface</span><span class="op">{}</span></span>
+<span id="cb9-13"><a href="#cb9-13" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb9-14"><a href="#cb9-14" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> customKey <span class="dt">int</span></span>
+<span id="cb9-15"><a href="#cb9-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-16"><a href="#cb9-16" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> identityKey customKey</span>
+<span id="cb9-17"><a href="#cb9-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-18"><a href="#cb9-18" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> NewIdentityContext<span class="op">(</span>ctx context<span class="op">.</span>Context<span class="op">,</span> identity <span class="op">*</span>kc<span class="op">.</span>Identity<span class="op">)</span> context<span class="op">.</span>Context <span class="op">{</span></span>
+<span id="cb9-19"><a href="#cb9-19" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> context<span class="op">.</span>WithValue<span class="op">(</span>ctx<span class="op">,</span> identityKey<span class="op">,</span> identity<span class="op">)</span></span>
+<span id="cb9-20"><a href="#cb9-20" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb9-21"><a href="#cb9-21" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> IdentityFromContext<span class="op">(</span>ctx context<span class="op">.</span>Context<span class="op">)</span> <span class="op">(*</span>Identity<span class="op">,</span> <span class="dt">error</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb9-22"><a href="#cb9-22" aria-hidden="true" tabindex="-1"></a>    identity<span class="op">,</span> ok <span class="op">:=</span> ctx<span class="op">.</span>Value<span class="op">(</span>identityKey<span class="op">).(*</span>kc<span class="op">.</span>Identity<span class="op">)</span></span>
+<span id="cb9-23"><a href="#cb9-23" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> ok <span class="op">{</span></span>
+<span id="cb9-24"><a href="#cb9-24" aria-hidden="true" tabindex="-1"></a>        traits<span class="op">,</span> ok <span class="op">:=</span> identity<span class="op">.</span>Traits<span class="op">.(</span><span class="kw">map</span><span class="op">[</span><span class="dt">string</span><span class="op">]</span><span class="kw">interface</span><span class="op">{})</span></span>
+<span id="cb9-25"><a href="#cb9-25" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> ok <span class="op">{</span></span>
+<span id="cb9-26"><a href="#cb9-26" aria-hidden="true" tabindex="-1"></a>            <span class="cf">return</span> <span class="op">&amp;</span>Identity<span class="op">{</span>Identity<span class="op">:</span> <span class="op">*</span>identity<span class="op">,</span> traits<span class="op">:</span> traits<span class="op">},</span> <span class="ot">nil</span></span>
+<span id="cb9-27"><a href="#cb9-27" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span></span>
+<span id="cb9-28"><a href="#cb9-28" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb9-29"><a href="#cb9-29" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="ot">nil</span><span class="op">,</span> fmt<span class="op">.</span>Errorf<span class="op">(</span><span class="st">"no identity found in context"</span><span class="op">)</span></span>
+<span id="cb9-30"><a href="#cb9-30" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb9-31"><a href="#cb9-31" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-32"><a href="#cb9-32" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>i <span class="op">*</span>Identity<span class="op">)</span> GetTrait<span class="op">(</span>key <span class="dt">string</span><span class="op">)</span> <span class="op">(</span><span class="dt">string</span><span class="op">,</span> <span class="dt">bool</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb9-33"><a href="#cb9-33" aria-hidden="true" tabindex="-1"></a>    val<span class="op">,</span> ok <span class="op">:=</span> i<span class="op">.</span>traits<span class="op">[</span>key<span class="op">].(</span><span class="dt">string</span><span class="op">)</span></span>
+<span id="cb9-34"><a href="#cb9-34" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> val<span class="op">,</span> ok</span>
+<span id="cb9-35"><a href="#cb9-35" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p>The traits property of the sdk’s identity type is untyped since it depends on the identity schema, so in our own identity type we wrapped it in a map with a custom getter for string fields.</p>
+<p>In a resolver, we can access the identity like this:</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode go code-with-copy"><code class="sourceCode go"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>r <span class="op">*</span>mutationResolver<span class="op">)</span> SetMyDescription<span class="op">(</span>ctx context<span class="op">.</span>Context<span class="op">,</span> description <span class="dt">string</span><span class="op">)</span> <span class="op">(</span><span class="dt">bool</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>    me<span class="op">,</span> err <span class="op">:=</span> auth<span class="op">.</span>IdentityFromContext<span class="op">(</span>ctx<span class="op">)</span></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="ot">false</span><span class="op">,</span> err</span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>    err <span class="op">=</span> r<span class="op">.</span>queries<span class="op">.</span>SetDescription<span class="op">(</span>context<span class="op">.</span>Background<span class="op">(),</span> sqlc<span class="op">.</span>SetDescriptionParams<span class="op">{</span>Description<span class="op">:</span> description<span class="op">,</span> ID<span class="op">:</span> uuid<span class="op">.</span>MustParse<span class="op">(</span>me<span class="op">.</span>Id<span class="op">)})</span></span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> err <span class="op">==</span> <span class="ot">nil</span><span class="op">,</span> err</span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p>Pretty elegant, right?</p>
+<p>I hope to have given a nice introduction to Ory Kratos! Please feel free to comment on what we could do more elegantly! Also I’m interested in your solutions for secret management in Kubernetes!</p>
+</section>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+window.document.addEventListener("DOMContentLoaded", function (event) {
+  const toggleBodyColorMode = (bsSheetEl) => {
+    const mode = bsSheetEl.getAttribute("data-mode");
+    const bodyEl = window.document.querySelector("body");
+    if (mode === "dark") {
+      bodyEl.classList.add("quarto-dark");
+      bodyEl.classList.remove("quarto-light");
+    } else {
+      bodyEl.classList.add("quarto-light");
+      bodyEl.classList.remove("quarto-dark");
+    }
+  }
+  const toggleBodyColorPrimary = () => {
+    const bsSheetEl = window.document.querySelector("link#quarto-bootstrap");
+    if (bsSheetEl) {
+      toggleBodyColorMode(bsSheetEl);
+    }
+  }
+  toggleBodyColorPrimary();  
+  const icon = "";
+  const anchorJS = new window.AnchorJS();
+  anchorJS.options = {
+    placement: 'right',
+    icon: icon
+  };
+  anchorJS.add('.anchored');
+  const isCodeAnnotation = (el) => {
+    for (const clz of el.classList) {
+      if (clz.startsWith('code-annotation-')) {                     
+        return true;
+      }
+    }
+    return false;
+  }
+  const clipboard = new window.ClipboardJS('.code-copy-button', {
+    text: function(trigger) {
+      const codeEl = trigger.previousElementSibling.cloneNode(true);
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+  });
+  clipboard.on('success', function(e) {
+    // button target
+    const button = e.trigger;
+    // don't keep focus
+    button.blur();
+    // flash "checked"
+    button.classList.add('code-copy-button-checked');
+    var currentTitle = button.getAttribute("title");
+    button.setAttribute("title", "Copied!");
+    let tooltip;
+    if (window.bootstrap) {
+      button.setAttribute("data-bs-toggle", "tooltip");
+      button.setAttribute("data-bs-placement", "left");
+      button.setAttribute("data-bs-title", "Copied!");
+      tooltip = new bootstrap.Tooltip(button, 
+        { trigger: "manual", 
+          customClass: "code-copy-button-tooltip",
+          offset: [0, -8]});
+      tooltip.show();    
+    }
+    setTimeout(function() {
+      if (tooltip) {
+        tooltip.hide();
+        button.removeAttribute("data-bs-title");
+        button.removeAttribute("data-bs-toggle");
+        button.removeAttribute("data-bs-placement");
+      }
+      button.setAttribute("title", currentTitle);
+      button.classList.remove('code-copy-button-checked');
+    }, 1000);
+    // clear code selection
+    e.clearSelection();
+  });
+  function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+    const config = {
+      allowHTML: true,
+      maxWidth: 500,
+      delay: 100,
+      arrow: false,
+      appendTo: function(el) {
+          return el.parentElement;
+      },
+      interactive: true,
+      interactiveBorder: 10,
+      theme: 'quarto',
+      placement: 'bottom-start',
+    };
+    if (contentFn) {
+      config.content = contentFn;
+    }
+    if (onTriggerFn) {
+      config.onTrigger = onTriggerFn;
+    }
+    if (onUntriggerFn) {
+      config.onUntrigger = onUntriggerFn;
+    }
+    window.tippy(el, config); 
+  }
+  const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+  for (var i=0; i<noterefs.length; i++) {
+    const ref = noterefs[i];
+    tippyHover(ref, function() {
+      // use id or data attribute instead here
+      let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+      try { href = new URL(href).hash; } catch {}
+      const id = href.replace(/^#\/?/, "");
+      const note = window.document.getElementById(id);
+      return note.innerHTML;
+    });
+  }
+  const xrefs = window.document.querySelectorAll('a.quarto-xref');
+  const processXRef = (id, note) => {
+    // Strip column container classes
+    const stripColumnClz = (el) => {
+      el.classList.remove("page-full", "page-columns");
+      if (el.children) {
+        for (const child of el.children) {
+          stripColumnClz(child);
+        }
+      }
+    }
+    stripColumnClz(note)
+    if (id === null || id.startsWith('sec-')) {
+      // Special case sections, only their first couple elements
+      const container = document.createElement("div");
+      if (note.children && note.children.length > 2) {
+        container.appendChild(note.children[0].cloneNode(true));
+        for (let i = 1; i < note.children.length; i++) {
+          const child = note.children[i];
+          if (child.tagName === "P" && child.innerText === "") {
+            continue;
+          } else {
+            container.appendChild(child.cloneNode(true));
+            break;
+          }
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(container);
+        }
+        return container.innerHTML
+      } else {
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        return note.innerHTML;
+      }
+    } else {
+      // Remove any anchor links if they are present
+      const anchorLink = note.querySelector('a.anchorjs-link');
+      if (anchorLink) {
+        anchorLink.remove();
+      }
+      if (window.Quarto?.typesetMath) {
+        window.Quarto.typesetMath(note);
+      }
+      // TODO in 1.5, we should make sure this works without a callout special case
+      if (note.classList.contains("callout")) {
+        return note.outerHTML;
+      } else {
+        return note.innerHTML;
+      }
+    }
+  }
+  for (var i=0; i<xrefs.length; i++) {
+    const xref = xrefs[i];
+    tippyHover(xref, undefined, function(instance) {
+      instance.disable();
+      let url = xref.getAttribute('href');
+      let hash = undefined; 
+      if (url.startsWith('#')) {
+        hash = url;
+      } else {
+        try { hash = new URL(url).hash; } catch {}
+      }
+      if (hash) {
+        const id = hash.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note !== null) {
+          try {
+            const html = processXRef(id, note.cloneNode(true));
+            instance.setContent(html);
+          } finally {
+            instance.enable();
+            instance.show();
+          }
+        } else {
+          // See if we can fetch this
+          fetch(url.split('#')[0])
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.getElementById(id);
+            if (note !== null) {
+              const html = processXRef(id, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      } else {
+        // See if we can fetch a full url (with no hash to target)
+        // This is a special case and we should probably do some content thinning / targeting
+        fetch(url)
+        .then(res => res.text())
+        .then(html => {
+          const parser = new DOMParser();
+          const htmlDoc = parser.parseFromString(html, "text/html");
+          const note = htmlDoc.querySelector('main.content');
+          if (note !== null) {
+            // This should only happen for chapter cross references
+            // (since there is no id in the URL)
+            // remove the first header
+            if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+              note.children[0].remove();
+            }
+            const html = processXRef(null, note);
+            instance.setContent(html);
+          } 
+        }).finally(() => {
+          instance.enable();
+          instance.show();
+        });
+      }
+    }, function(instance) {
+    });
+  }
+      let selectedAnnoteEl;
+      const selectorForAnnotation = ( cell, annotation) => {
+        let cellAttr = 'data-code-cell="' + cell + '"';
+        let lineAttr = 'data-code-annotation="' +  annotation + '"';
+        const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+        return selector;
+      }
+      const selectCodeLines = (annoteEl) => {
+        const doc = window.document;
+        const targetCell = annoteEl.getAttribute("data-target-cell");
+        const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+        const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+        const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+        const lineIds = lines.map((line) => {
+          return targetCell + "-" + line;
+        })
+        let top = null;
+        let height = null;
+        let parent = null;
+        if (lineIds.length > 0) {
+            //compute the position of the single el (top and bottom and make a div)
+            const el = window.document.getElementById(lineIds[0]);
+            top = el.offsetTop;
+            height = el.offsetHeight;
+            parent = el.parentElement.parentElement;
+          if (lineIds.length > 1) {
+            const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+            const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+            height = bottom - top;
+          }
+          if (top !== null && height !== null && parent !== null) {
+            // cook up a div (if necessary) and position it 
+            let div = window.document.getElementById("code-annotation-line-highlight");
+            if (div === null) {
+              div = window.document.createElement("div");
+              div.setAttribute("id", "code-annotation-line-highlight");
+              div.style.position = 'absolute';
+              parent.appendChild(div);
+            }
+            div.style.top = top - 2 + "px";
+            div.style.height = height + 4 + "px";
+            div.style.left = 0;
+            let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+            if (gutterDiv === null) {
+              gutterDiv = window.document.createElement("div");
+              gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+              gutterDiv.style.position = 'absolute';
+              const codeCell = window.document.getElementById(targetCell);
+              const gutter = codeCell.querySelector('.code-annotation-gutter');
+              gutter.appendChild(gutterDiv);
+            }
+            gutterDiv.style.top = top - 2 + "px";
+            gutterDiv.style.height = height + 4 + "px";
+          }
+          selectedAnnoteEl = annoteEl;
+        }
+      };
+      const unselectCodeLines = () => {
+        const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+        elementsIds.forEach((elId) => {
+          const div = window.document.getElementById(elId);
+          if (div) {
+            div.remove();
+          }
+        });
+        selectedAnnoteEl = undefined;
+      };
+        // Handle positioning of the toggle
+    window.addEventListener(
+      "resize",
+      throttle(() => {
+        elRect = undefined;
+        if (selectedAnnoteEl) {
+          selectCodeLines(selectedAnnoteEl);
+        }
+      }, 10)
+    );
+    function throttle(fn, ms) {
+    let throttle = false;
+    let timer;
+      return (...args) => {
+        if(!throttle) { // first call gets through
+            fn.apply(this, args);
+            throttle = true;
+        } else { // all the others get throttled
+            if(timer) clearTimeout(timer); // cancel #2
+            timer = setTimeout(() => {
+              fn.apply(this, args);
+              timer = throttle = false;
+            }, ms);
+        }
+      };
+    }
+      // Attach click handler to the DT
+      const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+      for (const annoteDlNode of annoteDls) {
+        annoteDlNode.addEventListener('click', (event) => {
+          const clickedEl = event.target;
+          if (clickedEl !== selectedAnnoteEl) {
+            unselectCodeLines();
+            const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+            if (activeEl) {
+              activeEl.classList.remove('code-annotation-active');
+            }
+            selectCodeLines(clickedEl);
+            clickedEl.classList.add('code-annotation-active');
+          } else {
+            // Unselect the line
+            unselectCodeLines();
+            clickedEl.classList.remove('code-annotation-active');
+          }
+        });
+      }
+  const findCites = (el) => {
+    const parentEl = el.parentElement;
+    if (parentEl) {
+      const cites = parentEl.dataset.cites;
+      if (cites) {
+        return {
+          el,
+          cites: cites.split(' ')
+        };
+      } else {
+        return findCites(el.parentElement)
+      }
+    } else {
+      return undefined;
+    }
+  };
+  var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+  for (var i=0; i<bibliorefs.length; i++) {
+    const ref = bibliorefs[i];
+    const citeInfo = findCites(ref);
+    if (citeInfo) {
+      tippyHover(citeInfo.el, function() {
+        var popup = window.document.createElement('div');
+        citeInfo.cites.forEach(function(cite) {
+          var citeDiv = window.document.createElement('div');
+          citeDiv.classList.add('hanging-indent');
+          citeDiv.classList.add('csl-entry');
+          var biblioDiv = window.document.getElementById('ref-' + cite);
+          if (biblioDiv) {
+            citeDiv.innerHTML = biblioDiv.innerHTML;
+          }
+          popup.appendChild(citeDiv);
+        });
+        return popup.innerHTML;
+      });
+    }
+  }
+});
+</script>
+</div> <!-- /content -->
+
+
+
+
+</body></html>
