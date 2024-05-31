@@ -399,4 +399,9 @@ scatter([p.activity for p in players_to_plot], [p.trophies for p in players_to_p
 
 ![](main_files/figure-markdown_strict/fig-active-vs-trophies-output-1.svg)
 
-To conclude, we
+To conclude, we found that you need 864 trophies to be in the top 1% of
+players in Brawl Stars. This result is robust against changes in the
+standard deviation of the skill level and the activity level of the
+players. We hope you enjoyed this post and learned something new about
+Brawl Stars! And remember, it is just a game; playing too much does not
+help in our simulation.
