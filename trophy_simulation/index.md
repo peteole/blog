@@ -364,7 +364,7 @@ for num_players in [100,1000, 10000, 100000, 1000000]
     step=ceil(Int,num_players/num_points_to_plot)
     # plot all but the last 50 in steps of step and the last 50 players
     to_plot=vcat(1:step:(num_players-50),(num_players-50):(num_players-1))
-    plot!(p,trophies[1:step:end-1], percent_better[1:step:end-1], label="$num_players players", xlims=(600,maximum(trophies)))
+    plot!(p,trophies[to_plot], percent_better[to_plot], label="$num_players players", xlims=(600,maximum(trophies)))
 end
 display(p)
 ```
