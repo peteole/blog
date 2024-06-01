@@ -68,7 +68,8 @@ end
 ```
 
 How are the players rewarded or penalized after a game? This data is
-publicly accesible:
+publicly accesible [here](https://brawlstars.fandom.com/wiki/Trophies)
+and can be verified within the game.
 
 <table>
 <thead>
@@ -194,6 +195,27 @@ println("Trophy change at 543 trophies after a loss: ", get_trophy_change(543, f
     Trophy change at 543 trophies after a win: 8
     Trophy change at 543 trophies after a loss: -6
 
+This code may seem complicated due to the precomputation. A more simple
+version would be:
+
+``` julia
+min_trophies = trophy_changes[:,"min trophies"]
+max_trophies = trophy_changes[:,"max trophies"]
+win_trophy_bonus = trophy_changes[:,"win trophy bonus"]
+loss_trophy_penalty = trophy_changes[:,"loss trophy penalty"]
+function get_trophy_change(trophies::Int, win::Bool)
+    for i in 1:length(min_trophies)
+        if trophies >= min_trophies[i] && trophies <= max_trophies[i]
+            if win
+                return win_trophy_bonus[i]
+            else
+                return loss_trophy_penalty[i]
+            end
+        end
+    end
+end
+```
+
 Next, let us implement a round of the game. We first get the active
 players in this round and sort them by their trophy cound. This allows
 us to pair the players with similar trophy levels: We split the list of
@@ -261,7 +283,9 @@ players have more than a certain number of trophies in
 trophies=[p.trophies for p in players]
 trophies=sort(trophies)
 percent_better=1.0 .- (1:num_players) ./num_players
-plot(trophies[1:100:end-1], percent_better[1:100:end-1], label="Trophies", xlabel="Trophies", ylabel="Percentile", yscale=:log10, xlims=(600,maximum(trophies)),yminorgrid=true, legend=false)
+# plot all but the last 50 in steps of 100 and the last 50 players
+to_plot=vcat(1:100:(num_players-50),(num_players-50):(num_players-1))
+plot(trophies[to_plot], percent_better[to_plot], label="Trophies", xlabel="Trophies", ylabel="Percentile", yscale=:log10, xlims=(600,maximum(trophies)),yminorgrid=true, legend=false)
 ```
 
 ![](index_files/figure-markdown_strict/fig-trophies-cdf-output-1.svg)
@@ -295,11 +319,11 @@ markdown_table(df)
 </tr>
 <tr class="odd">
 <td>2.0</td>
-<td>844</td>
+<td>843</td>
 </tr>
 <tr class="even">
 <td>1.0</td>
-<td>861</td>
+<td>862</td>
 </tr>
 <tr class="odd">
 <td>0.1</td>
@@ -311,7 +335,7 @@ markdown_table(df)
 </tr>
 <tr class="odd">
 <td>0.001</td>
-<td>982</td>
+<td>980</td>
 </tr>
 </tbody>
 </table>
@@ -338,6 +362,8 @@ for num_players in [100,1000, 10000, 100000, 1000000]
     percent_better=1.0 .- (1:num_players) ./num_players
     num_points_to_plot=10000
     step=ceil(Int,num_players/num_points_to_plot)
+    # plot all but the last 50 in steps of step and the last 50 players
+    to_plot=vcat(1:step:(num_players-50),(num_players-50):(num_players-1))
     plot!(p,trophies[1:step:end-1], percent_better[1:step:end-1], label="$num_players players", xlims=(600,maximum(trophies)))
 end
 display(p)
@@ -386,7 +412,9 @@ for std in [0.05, 0.1, 0.2, 0.5, 1, 2,4]
     trophies=[p.trophies for p in players]
     trophies=sort(trophies)
     percent_better=1.0 .- (1:num_players) ./num_players
-    plot!(p,trophies[1:50:end-1], percent_better[1:50:end-1], label="skill std: $std", xlims=(600,maximum(trophies)))
+    # plot all but the last 50 in steps of 50 and the last 50 players
+    to_plot=vcat(1:50:(num_players-50),(num_players-50):(num_players-1))
+    plot!(p,trophies[to_plot], percent_better[to_plot], label="skill std: $std", xlims=(600,maximum(trophies)))
 end
 display(p)
 ```
@@ -421,12 +449,20 @@ num_players = 10000
 num_rounds = 2000
 players = [Player() for i in 1:num_players]
 every=10
+global lower_bound=0.0
+global upper_bound=500.0
 a=@animate for round in 1:every:num_rounds
     for i in 1:every
         step!(players)
     end
     players_to_plot = players[1:1000]
-    scatter([p.skill for p in players_to_plot], [p.trophies for p in players_to_plot], xlabel="Skill", ylabel="Trophies", title="Skill vs Trophies (round $round)",alpha=0.3, legend=false, ylims=(0,1100))
+    min_trophies=minimum([p.trophies for p in players_to_plot])
+    max_trophies=maximum([p.trophies for p in players_to_plot])
+    if round < 1000
+        global lower_bound += 0.05*(min_trophies-30-lower_bound)
+        global upper_bound += 0.1*(max_trophies+200-upper_bound)
+    end
+    scatter([p.skill for p in players_to_plot], [p.trophies for p in players_to_plot], xlabel="Skill", ylabel="Trophies", title="Skill vs Trophies (round $round)",alpha=0.3, legend=false, ylims=(lower_bound,upper_bound),yminorgrid=true)
 end
 gif(a, "skill_vs_trophies.gif", fps = 20)
 println("Done rendering")
