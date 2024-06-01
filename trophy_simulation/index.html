@@ -131,6 +131,12 @@ window.Quarto = {
     
   </div>
   
+<div>
+  <div class="abstract">
+    <div class="block-title">Abstract</div>
+    We simulate brawl stars 3v3 to find out how good a certain amount of trophies is compared to the other players. Our results from a billion games show that you need around 860 trophies on a brawler to be in the top 1% of players. The main input to the simulation is the trophy update rule, which is publicly available. We also find that the percentile of players with a certain amount of trophies is surprisingly independent from other parameters such as the number of players or the effect of the player’s skill on the outcome of the game.
+  </div>
+</div>
 
 
 </header>
@@ -1513,7 +1519,7 @@ Figure&nbsp;2: Fraction of players with at least a certain number of trophies
 </figure>
 </div>
 </div>
-<p>In the following table you can see that you need 864 trophies to be in the top 1% of players:</p>
+<p>In the following table you can see that you need around 860 trophies to be in the top 1% of players:</p>
 <div id="cell-20" class="cell" data-execution_count="10">
 <div class="sourceCode cell-code" id="cb10"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>percentiles_to_list<span class="op">=</span>[<span class="fl">10</span>,<span class="fl">5</span>,<span class="fl">2</span>,<span class="fl">1</span>,<span class="fl">0.1</span>,<span class="fl">0.01</span>,<span class="fl">0.001</span>]</span>
 <span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>indices<span class="op">=</span>[<span class="fu">ceil</span>(<span class="dt">Int</span>,(<span class="fl">1</span><span class="op">-</span>percentile<span class="op">/</span><span class="fl">100</span>)<span class="op">*</span>num_players) for percentile <span class="kw">in</span> percentiles_to_list]</span>

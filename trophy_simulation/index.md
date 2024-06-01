@@ -266,8 +266,8 @@ plot(trophies[1:100:end-1], percent_better[1:100:end-1], label="Trophies", xlabe
 
 ![](index_files/figure-markdown_strict/fig-trophies-cdf-output-1.svg)
 
-In the following table you can see that you need 864 trophies to be in
-the top 1% of players:
+In the following table you can see that you need around 860 trophies to
+be in the top 1% of players:
 
 ``` julia
 percentiles_to_list=[10,5,2,1,0.1,0.01,0.001]
