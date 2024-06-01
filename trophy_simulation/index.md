@@ -244,8 +244,8 @@ higher skill level is clearly correlated with a higher trophy count.
 
 ``` julia
 using Plots
-players_to_plot = players[1:10000]
-scatter([p.skill for p in players_to_plot], [p.trophies for p in players_to_plot], label="Skill vs Trophies", xlabel="Skill", ylabel="Trophies", title="Skill vs Trophies",alpha=0.1, legend=false)
+players_to_plot = players[1:1000]
+scatter([p.skill for p in players_to_plot], [p.trophies for p in players_to_plot], label="Skill vs Trophies", xlabel="Skill", ylabel="Trophies", title="Skill vs Trophies",alpha=0.3, legend=false)
 ```
 
 ![](index_files/figure-markdown_strict/fig-skills-vs-trophies-output-1.svg)
@@ -259,7 +259,7 @@ players have more than a certain number of trophies in
 trophies=[p.trophies for p in players]
 trophies=sort(trophies)
 percent_better=1.0 .- (1:num_players) ./num_players
-plot(trophies[1:end-1], percent_better[1:end-1], label="Trophies", xlabel="Trophies", ylabel="Percentile", title="CDF of trophies", yscale=:log10, xlims=(600,maximum(trophies)),yminorgrid=true, legend=false)
+plot(trophies[1:100:end-1], percent_better[1:100:end-1], label="Trophies", xlabel="Trophies", ylabel="Percentile", title="CDF of trophies", yscale=:log10, xlims=(600,maximum(trophies)),yminorgrid=true, legend=false)
 ```
 
 ![](index_files/figure-markdown_strict/fig-trophies-cdf-output-1.svg)
@@ -316,14 +316,15 @@ markdown_table(df)
 
 Next, let us test how this curve depends on the number of players.
 <a href="#fig-trophies-cdf-players" class="quarto-xref">Figure 3</a>
-shows an interesting result: If there are more players in the game, you
-not only need more trophies to be on a certain *absolute* position, but
-also to be in a certain *relative* position. Based on
-[this](https://activeplayer.io/brawl-stars/), brawl stars has around a
-million daily active players, so the initial plot is the most relevant.
+shows an interesting result: If there are more players in the game, it
+is easier to be in the top few players of the game. For the bulk of the
+players, the number of players does not really matter for the relative
+position. Based on [this](https://activeplayer.io/brawl-stars/), brawl
+stars has around a million daily active players, so the initial plot is
+the most relevant.
 
 ``` julia
-p=plot(xlabel="Trophies", ylabel="Percentile", title="CDF of trophies", yscale=:log10, yminorgrid=true)
+p=plot(xlabel="Trophies", ylabel="Percentile", yscale=:log10, yminorgrid=true)
 num_rounds=1000
 for num_players in [100,1000, 10000, 100000, 1000000]
     players = [Player() for i in 1:num_players]
@@ -333,7 +334,9 @@ for num_players in [100,1000, 10000, 100000, 1000000]
     trophies=[p.trophies for p in players]
     trophies=sort(trophies)
     percent_better=1.0 .- (1:num_players) ./num_players
-    plot!(p,trophies[1:end-1], percent_better[1:end-1], label="$num_players players", xlims=(600,maximum(trophies)))
+    num_points_to_plot=10000
+    step=ceil(Int,num_players/num_points_to_plot)
+    plot!(p,trophies[1:step:end-1], percent_better[1:step:end-1], label="$num_players players", xlims=(600,maximum(trophies)))
 end
 display(p)
 ```
@@ -370,7 +373,7 @@ means our result is robust against changes in this somehow arbitrary
 parameter.
 
 ``` julia
-p=plot(xlabel="Trophies", ylabel="Percentile", title="CDF of trophies", yscale=:log10, yminorgrid=true)
+p=plot(xlabel="Trophies", ylabel="Percentile", yscale=:log10, yminorgrid=true)
 num_players=10000
 num_rounds=1000
 for std in [0.05, 0.1, 0.2, 0.5, 1, 2,4]
@@ -381,7 +384,7 @@ for std in [0.05, 0.1, 0.2, 0.5, 1, 2,4]
     trophies=[p.trophies for p in players]
     trophies=sort(trophies)
     percent_better=1.0 .- (1:num_players) ./num_players
-    plot!(p,trophies[1:end-1], percent_better[1:end-1], label="skill std: $std", xlims=(600,maximum(trophies)))
+    plot!(p,trophies[1:50:end-1], percent_better[1:50:end-1], label="skill std: $std", xlims=(600,maximum(trophies)))
 end
 display(p)
 ```
@@ -393,8 +396,8 @@ Finally, we find in
 playing more actively does not influence the trophy count significantly.
 
 ``` julia
-players_to_plot = sample(players, 10000)
-scatter([p.activity for p in players_to_plot], [p.trophies for p in players_to_plot], label="Activity vs Trophies", xlabel="Activity", ylabel="Trophies", title="Activity vs Trophies", alpha=0.1)
+players_to_plot = players[1:2000]
+scatter([p.activity for p in players_to_plot], [p.trophies for p in players_to_plot], label="Activity vs Trophies", xlabel="Activity", ylabel="Trophies", title="Activity vs Trophies", alpha=0.3)
 ```
 
 ![](index_files/figure-markdown_strict/fig-active-vs-trophies-output-1.svg)
