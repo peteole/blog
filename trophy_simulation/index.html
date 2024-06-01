@@ -3965,7 +3965,7 @@ Figure&nbsp;6: Activity level vs trophies for the first 20000 players
 <p>To conclude, we found that you need 864 trophies to be in the top 1% of players in Brawl Stars. This result is robust against changes in the standard deviation of the skill level and the activity level of the players. We hope you enjoyed this post and learned something new about Brawl Stars! And remember, it is just a game; playing too much does not help in our simulation.</p>
 <p>As a bonus, we animated the trophy count of the players over the games:</p>
 <div class="quarto-video"><video id="video_shortcode_videojs_video1" class="video-js vjs-default-skin vjs-fluid" controls="" preload="auto" data-setup="{}" title=""><source src="skill_vs_trophies.mp4"></video></div>
-<div id="cell-31" class="cell" data-execution_count="34">
+<div id="cell-31" class="cell" data-execution_count="40">
 <div class="sourceCode cell-code" id="cb15"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">Plots</span></span>
 <span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>num_players <span class="op">=</span> <span class="fl">10000</span></span>
 <span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>num_rounds <span class="op">=</span> <span class="fl">2000</span></span>
@@ -3976,17 +3976,11 @@ Figure&nbsp;6: Activity level vs trophies for the first 20000 players
 <span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a>        <span class="fu">step!</span>(players)</span>
 <span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
 <span id="cb15-10"><a href="#cb15-10" aria-hidden="true" tabindex="-1"></a>    players_to_plot <span class="op">=</span> players[<span class="fl">1</span><span class="op">:</span><span class="fl">1000</span>]</span>
-<span id="cb15-11"><a href="#cb15-11" aria-hidden="true" tabindex="-1"></a>    <span class="fu">scatter</span>([p.skill for p <span class="kw">in</span> players_to_plot], [p.trophies for p <span class="kw">in</span> players_to_plot], xlabel<span class="op">=</span><span class="st">"Skill"</span>, ylabel<span class="op">=</span><span class="st">"Trophies"</span>, title<span class="op">=</span><span class="st">"Skill vs Trophies </span><span class="sc">$</span>round<span class="st">"</span>,alpha<span class="op">=</span><span class="fl">0.3</span>, legend<span class="op">=</span><span class="cn">false</span>, ylims<span class="op">=</span>(<span class="fl">0</span>,<span class="fl">1100</span>))</span>
+<span id="cb15-11"><a href="#cb15-11" aria-hidden="true" tabindex="-1"></a>    <span class="fu">scatter</span>([p.skill for p <span class="kw">in</span> players_to_plot], [p.trophies for p <span class="kw">in</span> players_to_plot], xlabel<span class="op">=</span><span class="st">"Skill"</span>, ylabel<span class="op">=</span><span class="st">"Trophies"</span>, title<span class="op">=</span><span class="st">"Skill vs Trophies (round </span><span class="sc">$</span>round<span class="st">)"</span>,alpha<span class="op">=</span><span class="fl">0.3</span>, legend<span class="op">=</span><span class="cn">false</span>, ylims<span class="op">=</span>(<span class="fl">0</span>,<span class="fl">1100</span>))</span>
 <span id="cb15-12"><a href="#cb15-12" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span>
-<span id="cb15-13"><a href="#cb15-13" aria-hidden="true" tabindex="-1"></a><span class="fu">gif</span>(a, <span class="st">"skill_vs_trophies.mp4"</span>, fps <span class="op">=</span> <span class="fl">10</span>)</span>
-<span id="cb15-14"><a href="#cb15-14" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(<span class="st">"Done rendering"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
-<div class="cell-output cell-output-stdout">
-<pre><code>Done rendering</code></pre>
-</div>
-<div class="cell-output cell-output-stderr">
-<pre><code>┌ Info: Saved animation to /Users/ole/Documents/software/blog/trophy_simulation/skill_vs_trophies.mp4
-└ @ Plots /Users/ole/.julia/packages/Plots/ju9dp/src/animation.jl:156</code></pre>
-</div>
+<span id="cb15-13"><a href="#cb15-13" aria-hidden="true" tabindex="-1"></a><span class="fu">gif</span>(a, <span class="st">"skill_vs_trophies.gif"</span>, fps <span class="op">=</span> <span class="fl">20</span>)</span>
+<span id="cb15-14"><a href="#cb15-14" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(<span class="st">"Done rendering"</span>)</span>
+<span id="cb15-15"><a href="#cb15-15" aria-hidden="true" tabindex="-1"></a><span class="fu">run</span>(<span class="ss">`ffmpeg -f gif -i skill_vs_trophies.gif -y -pix_fmt yuv420p skill_vs_trophies.mp4`</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
 </section>
 

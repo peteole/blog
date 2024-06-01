@@ -426,13 +426,9 @@ a=@animate for round in 1:every:num_rounds
         step!(players)
     end
     players_to_plot = players[1:1000]
-    scatter([p.skill for p in players_to_plot], [p.trophies for p in players_to_plot], xlabel="Skill", ylabel="Trophies", title="Skill vs Trophies $round",alpha=0.3, legend=false, ylims=(0,1100))
+    scatter([p.skill for p in players_to_plot], [p.trophies for p in players_to_plot], xlabel="Skill", ylabel="Trophies", title="Skill vs Trophies (round $round)",alpha=0.3, legend=false, ylims=(0,1100))
 end
-gif(a, "skill_vs_trophies.mp4", fps = 10)
+gif(a, "skill_vs_trophies.gif", fps = 20)
 println("Done rendering")
+run(`ffmpeg -f gif -i skill_vs_trophies.gif -y -pix_fmt yuv420p skill_vs_trophies.mp4`)
 ```
-
-    Done rendering
-
-    ┌ Info: Saved animation to /Users/ole/Documents/software/blog/trophy_simulation/skill_vs_trophies.mp4
-    └ @ Plots /Users/ole/.julia/packages/Plots/ju9dp/src/animation.jl:156
