@@ -410,3 +410,29 @@ standard deviation of the skill level and the activity level of the
 players. We hope you enjoyed this post and learned something new about
 Brawl Stars! And remember, it is just a game; playing too much does not
 help in our simulation.
+
+As a bonus, we animated the trophy count of the players over the games:
+
+[skill_vs_trophies.mp4](skill_vs_trophies.mp4)
+
+``` julia
+using Plots
+num_players = 10000
+num_rounds = 2000
+players = [Player() for i in 1:num_players]
+every=10
+a=@animate for round in 1:every:num_rounds
+    for i in 1:every
+        step!(players)
+    end
+    players_to_plot = players[1:1000]
+    scatter([p.skill for p in players_to_plot], [p.trophies for p in players_to_plot], xlabel="Skill", ylabel="Trophies", title="Skill vs Trophies $round",alpha=0.3, legend=false, ylims=(0,1100))
+end
+gif(a, "skill_vs_trophies.mp4", fps = 10)
+println("Done rendering")
+```
+
+    Done rendering
+
+    ┌ Info: Saved animation to /Users/ole/Documents/software/blog/trophy_simulation/skill_vs_trophies.mp4
+    └ @ Plots /Users/ole/.julia/packages/Plots/ju9dp/src/animation.jl:156
