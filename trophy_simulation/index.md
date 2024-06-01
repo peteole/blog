@@ -13,7 +13,9 @@ where two teams of three players each fight against each other. We are
 primarily interested in top players; therefore, we will assume that all
 brawlers are maxed out. The strength of a player is assumed to be soley
 determined by a single number, the skill level, which is constant over
-all games. Players have a trophy cound, changing over the rounds.
+all games. Players have a trophy count for the brawler they play, which
+is changing over the rounds. We assume players are matched based on the
+trophy count of the brawler they play.
 
 We simplistically assume that the game is played in discrete global
 rounds. For each round, each player joins with a probability of
@@ -259,7 +261,7 @@ players have more than a certain number of trophies in
 trophies=[p.trophies for p in players]
 trophies=sort(trophies)
 percent_better=1.0 .- (1:num_players) ./num_players
-plot(trophies[1:100:end-1], percent_better[1:100:end-1], label="Trophies", xlabel="Trophies", ylabel="Percentile", title="CDF of trophies", yscale=:log10, xlims=(600,maximum(trophies)),yminorgrid=true, legend=false)
+plot(trophies[1:100:end-1], percent_better[1:100:end-1], label="Trophies", xlabel="Trophies", ylabel="Percentile", yscale=:log10, xlims=(600,maximum(trophies)),yminorgrid=true, legend=false)
 ```
 
 ![](index_files/figure-markdown_strict/fig-trophies-cdf-output-1.svg)
@@ -285,7 +287,7 @@ markdown_table(df)
 <tbody>
 <tr class="odd">
 <td>10.0</td>
-<td>799</td>
+<td>798</td>
 </tr>
 <tr class="even">
 <td>5.0</td>
@@ -297,7 +299,7 @@ markdown_table(df)
 </tr>
 <tr class="even">
 <td>1.0</td>
-<td>862</td>
+<td>861</td>
 </tr>
 <tr class="odd">
 <td>0.1</td>
@@ -309,7 +311,7 @@ markdown_table(df)
 </tr>
 <tr class="odd">
 <td>0.001</td>
-<td>983</td>
+<td>982</td>
 </tr>
 </tbody>
 </table>
