@@ -32,7 +32,8 @@ mutable struct Player
     trophies::Int
     skill::Float64
     activity::Float64
-    Player(skill_dist=Normal(0, 3),activity_dist=Uniform(0.2, 1)) = new(0, rand(skill_dist), rand(activity_dist))
+    streak::Int
+    Player(skill_dist=Normal(0, 3),activity_dist=Uniform(0.2, 1)) = new(0, rand(skill_dist), rand(activity_dist),0)
 end
 ```
 
@@ -170,24 +171,29 @@ and can be verified within the game.
 
 So now, let us write a function that returns the new trophy count of the
 players after a game. Since this is run billions of times, we
-pre-compute the result in bins of 50 trophies:
+pre-compute the result in bins of 50 trophies.
+
+Further, there is a concept called *win streaks*. If a player wins 2
+games in a row, they get one extra trophy, for 3 wins in a row, they get
+2 extra trophies, up to 5 extra posts for 6 wins in a row. Let us
+implement this:
 
 ``` julia
-num_bins=1200÷50+1
-to_bin(trophies::Int)=1+min(trophies,1200) ÷ 50
-win_trophies_by_bin=zeros(Int,num_bins)
-loss_trophies_by_bin=zeros(Int,num_bins)
+num_bins = 1200 ÷ 50 + 1
+to_bin(trophies::Int) = 1 + min(trophies, 1200) ÷ 50
+win_trophies_by_bin = zeros(Int, num_bins)
+loss_trophies_by_bin = zeros(Int, num_bins)
 for trophy in 0:50:1200
-    df_row=first(filter(row->row[1]<=trophy<=row[2],eachrow(trophy_changes)))
-    win_trophies_by_bin[to_bin(trophy)]=df_row["win trophy bonus"]
-    loss_trophies_by_bin[to_bin(trophy)]=df_row["loss trophy penalty"]
+    df_row = first(filter(row -> row[1] <= trophy <= row[2], eachrow(trophy_changes)))
+    win_trophies_by_bin[to_bin(trophy)] = df_row["win trophy bonus"]
+    loss_trophies_by_bin[to_bin(trophy)] = df_row["loss trophy penalty"]
 end
-function get_trophy_change(trophies::Int, win::Bool)
+function get_trophy_change(trophies::Int, win::Bool, streak_length::Int=0)
     trophy_bin = to_bin(trophies)
-    return win ? win_trophies_by_bin[trophy_bin] : loss_trophies_by_bin[trophy_bin]
+    return clamp(streak_length - 1, 0, 5) + (win ? win_trophies_by_bin[trophy_bin] : loss_trophies_by_bin[trophy_bin])
 end
-@assert all(get_trophy_change.(trophy_changes[:,"min trophies"], true) .== trophy_changes[:,"win trophy bonus"])
-@assert all(get_trophy_change.(trophy_changes[:,"min trophies"], false) .== trophy_changes[:,"loss trophy penalty"])
+@assert all(get_trophy_change.(trophy_changes[:, "min trophies"], true) .== trophy_changes[:, "win trophy bonus"])
+@assert all(get_trophy_change.(trophy_changes[:, "min trophies"], false) .== trophy_changes[:, "loss trophy penalty"])
 println("Trophy change at 543 trophies after a win: ", get_trophy_change(543, true))
 println("Trophy change at 543 trophies after a loss: ", get_trophy_change(543, false))
 ```
@@ -203,13 +209,13 @@ min_trophies = trophy_changes[:,"min trophies"]
 max_trophies = trophy_changes[:,"max trophies"]
 win_trophy_bonus = trophy_changes[:,"win trophy bonus"]
 loss_trophy_penalty = trophy_changes[:,"loss trophy penalty"]
-function get_trophy_change(trophies::Int, win::Bool)
+function get_trophy_change(trophies::Int, win::Bool, streak_length::Int)
     for i in 1:length(min_trophies)
         if trophies >= min_trophies[i] && trophies <= max_trophies[i]
             if win
-                return win_trophy_bonus[i]
+                return clamp(streak_length - 1, 0, 5) + win_trophy_bonus[i]
             else
-                return loss_trophy_penalty[i]
+                return clamp(streak_length - 1, 0, 5) + loss_trophy_penalty[i]
             end
         end
     end
@@ -239,10 +245,12 @@ function step!(players::Vector{Player}, team_size::Int=3)
             @assert length(team1) == length(team2) == team_size
             team1_wins = play(team1, team2)
             for p in team1
-                p.trophies += get_trophy_change(p.trophies, team1_wins)
+                p.streak += 1
+                p.trophies += get_trophy_change(p.trophies, team1_wins, p.streak)
             end
             for p in team2
-                p.trophies += get_trophy_change(p.trophies, !team1_wins)
+                p.streak = 0
+                p.trophies += get_trophy_change(p.trophies, !team1_wins,p.streak)
             end
         end
     end
@@ -311,31 +319,31 @@ markdown_table(df)
 <tbody>
 <tr class="odd">
 <td>10.0</td>
-<td>798</td>
+<td>860</td>
 </tr>
 <tr class="even">
 <td>5.0</td>
-<td>819</td>
+<td>883</td>
 </tr>
 <tr class="odd">
 <td>2.0</td>
-<td>843</td>
+<td>906</td>
 </tr>
 <tr class="even">
 <td>1.0</td>
-<td>862</td>
+<td>921</td>
 </tr>
 <tr class="odd">
 <td>0.1</td>
-<td>907</td>
+<td>967</td>
 </tr>
 <tr class="even">
 <td>0.01</td>
-<td>942</td>
+<td>1004</td>
 </tr>
 <tr class="odd">
 <td>0.001</td>
-<td>980</td>
+<td>1043</td>
 </tr>
 </tbody>
 </table>
