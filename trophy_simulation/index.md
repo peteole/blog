@@ -74,13 +74,13 @@ and can be verified within the game.
 
 ``` julia
 using MarkdownTables
+using DataFrames
 trophy_changes = DataFrame(
     "min trophies" => [0, 50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 1100, 1200],
     "max trophies" => [49, 99, 199, 299, 399, 499, 599, 699, 799, 899, 999, 1099, 1199, Inf],
     "win trophy bonus" => [8, 8, 8, 8, 8, 8, 8, 8, 8, 7, 6, 5, 4, 3],
     "loss trophy penalty" => [0, -1, -2, -3, -4, -5, -6, -7, -8, -9, -10, -11, -12, -12]
 )
-@assert trophy_changes == trophy_changes_2
 markdown_table(trophy_changes)
 ```
 
